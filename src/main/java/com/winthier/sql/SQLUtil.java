@@ -73,7 +73,7 @@ public final class SQLUtil {
             } else if (value instanceof Double) {
                 statement.setDouble(index, (Double)value);
             } else if (value instanceof UUID) {
-                statement.setString(index, ((UUID)value).toString());
+                statement.setString(index, ((UUID)value).toString().replace("-", ""));
             } else if (value instanceof Enum) {
                 statement.setString(index, ((Enum)value).name());
             } else {
