@@ -1,0 +1,8 @@
+name: SQL
+description: SQL library for Spigot. Replacement for Ebean.
+author: StarTux
+version: 0.1
+main: com.winthier.sql.SQLPlugin
+depend: []
+commands: {}
+permissions: {}
