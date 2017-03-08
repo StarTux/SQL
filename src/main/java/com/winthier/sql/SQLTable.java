@@ -212,13 +212,14 @@ public final class SQLTable<E> {
         return new Finder();
     }
 
-    public enum Comparison {
+    enum Comparison {
         EQ("="),
         NEQ("!="),
         LT("<"),
         GT(">"),
         LTE("<="),
-        GTE(">=");
+        GTE(">="),
+        LIKE("LIKE");
         public final String symbol;
         Comparison(String symbol) {
             this.symbol = symbol;
@@ -236,7 +237,7 @@ public final class SQLTable<E> {
             sb.append("SELECT * FROM `" + getTableName() + "`");
         }
 
-        public Finder compare(String label, Comparison comp, Object value) {
+        private Finder compare(String label, Comparison comp, Object value) {
             if (value == null) throw new IllegalArgumentException("Value cannot be null!");
             SQLColumn column = getColumn(label);
             if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
@@ -269,6 +270,10 @@ public final class SQLTable<E> {
 
         public Finder lte(String label, Object value) {
             return compare(label, Comparison.LTE, value);
+        }
+
+        public Finder like(String label, String value) {
+            return compare(label, Comparison.LIKE, value);
         }
 
         public Finder or() {
