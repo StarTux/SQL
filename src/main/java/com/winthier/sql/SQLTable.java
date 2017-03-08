@@ -7,12 +7,15 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
+import javax.persistence.UniqueConstraint;
 import lombok.Getter;
+import lombok.Value;
 
 @Getter
 public final class SQLTable<E> {
@@ -21,21 +24,29 @@ public final class SQLTable<E> {
     private String tableName;
     private List<SQLColumn> columns;
     private SQLColumn idColumn;
+    private List<Key> keys;
+
+    @Value
+    static class Key {
+        private String name;
+        private List<SQLColumn> columns;
+
+        static Key of(SQLColumn column) {
+            return new Key(column.getColumnName(), Arrays.asList(column));
+        }
+    }
 
     SQLTable(Class<E> clazz, SQLDatabase database) {
         this.clazz = clazz;
         this.database = database;
         Table tableAnnotation = clazz.getAnnotation(Table.class);
+        String tablePrefix = database == null ? "" : database.getConfig().getPrefix();
         if (tableAnnotation != null) {
-            tableName = tableAnnotation.name();
+            tableName = tablePrefix + tableAnnotation.name();
         }
-    }
-
-    String getTableName() {
         if (tableName == null || tableName.isEmpty()) {
-            tableName = SQLUtil.camelToLowerCase(clazz.getSimpleName());
+            tableName = tablePrefix + SQLUtil.camelToLowerCase(clazz.getSimpleName());
         }
-        return tableName;
     }
 
     List<SQLColumn> getColumns() {
@@ -52,6 +63,37 @@ public final class SQLTable<E> {
             }
         }
         return columns;
+    }
+
+    List<Key> getKeys() {
+        if (keys == null) {
+            keys = new ArrayList<>();
+            Table tableAnnotation = clazz.getAnnotation(Table.class);
+            if (tableAnnotation != null) {
+                UniqueConstraint[] constraints = tableAnnotation.uniqueConstraints();
+                if (constraints != null) {
+                    int counter = 0;
+                    for (UniqueConstraint constraint: constraints) {
+                        counter += 1;
+                        String name = "uq_" + getTableName() + "_" + counter;
+                        List<SQLColumn> constraintColumns = new ArrayList<>();
+                        for (String columnName: constraint.columnNames()) {
+                            SQLColumn column = getColumn(columnName);
+                            if (column == null) {
+                                throw new IllegalArgumentException(clazz.getName() + ": Column for unique constraint not found: " + columnName);
+                            } else {
+                                constraintColumns.add(column);
+                            }
+                        }
+                        keys.add(new Key(name, constraintColumns));
+                    }
+                }
+            }
+            for (SQLColumn column: getColumns()) {
+                if (column.isUnique()) keys.add(Key.of(column));
+            }
+        }
+        return keys;
     }
 
     SQLColumn getColumn(String label) {
@@ -71,6 +113,15 @@ public final class SQLTable<E> {
             sb.append(getColumns().get(i).getCreateTableFragment());
         }
         if (idColumn != null) sb.append(",\n  PRIMARY KEY (`").append(idColumn.getColumnName()).append("`)");
+        for (Key key: getKeys()) {
+            sb.append(",\n  UNIQUE KEY `").append(key.getName()).append("` (`");
+            List<SQLColumn> keyColumns = key.getColumns();
+            sb.append(keyColumns.get(0).getColumnName());
+            for (int i = 1; i < keyColumns.size(); ++i) {
+                sb.append("`, `").append(keyColumns.get(i).getColumnName());
+            }
+            sb.append("`)");
+        }
         sb.append("\n)");
         return sb.toString();
     }
@@ -244,6 +295,10 @@ public final class SQLTable<E> {
 
         public Finder orderByDescending(String label) {
             orderBy(label, "DESC");
+            return this;
+        }
+
+        public Finder where() {
             return this;
         }
 

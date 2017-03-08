@@ -2,17 +2,20 @@ package com.winthier.sql;
 
 import java.util.Date;
 import java.util.Random;
+import java.util.UUID;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
+import javax.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.bukkit.Material;
 
 @Entity
-@Table(name = "log")
+@Table(name = "log",
+       uniqueConstraints = {@UniqueConstraint(columnNames = {"playerUuid", "playerName"})})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,6 +23,9 @@ public class SQLLog {
     @Id private Integer id;
     @Column(nullable = false)
     private Date time;
+    private UUID playerUuid;
+    private String playerName;
+    @Column(unique = true)
     private Material material;
 
     @Override

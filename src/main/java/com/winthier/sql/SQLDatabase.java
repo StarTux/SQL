@@ -21,15 +21,18 @@ public final class SQLDatabase {
     @Getter private final JavaPlugin plugin;
     private final Map<Class<?>, SQLTable<?>> tables = new HashMap<>();
     private static final String SQL_CONFIG_FILE = "sql.yml";
+    private String tablePrefix;
 
     @Data
     final class Config {
-        private String host, port, database, user, password;
+        private String host, port, database, prefix, user, password;
 
         void load(ConfigurationSection c) {
+            final String name = SQLUtil.camelToLowerCase(plugin.getName());
             host = c.getString("hostname", host);
             port = c.getString("port", port);
-            database = c.getString("database", database);
+            database = c.getString("database", database).replace("{NAME}", name);
+            prefix = c.getString("prefix", prefix).replace("{NAME}", name);
             user = c.getString("user", user);
             password = c.getString("password", password);
         }
@@ -40,7 +43,7 @@ public final class SQLDatabase {
 
         @Override
         public String toString() {
-            return String.format("SQLDatabase.Config(host=%s port=%s database=%s user=%s password=%s)", host, port, database, user, password);
+            return String.format("SQLDatabase.Config(host=%s port=%s database=%s prefix=%s user=%s password=%s)", host, port, database, prefix, user, password);
         }
     }
     private Config config;
@@ -103,33 +106,37 @@ public final class SQLDatabase {
         return pluginConfig;
     }
 
-    public Connection getConnection() {
+    public Connection getConnection() throws SQLException {
         try {
             if (connection == null || !connection.isValid(1)) {
                 Class.forName("com.mysql.jdbc.Driver");
                 Config c = getConfig();
                 connection = DriverManager.getConnection(c.getUrl(), c.getUser(), c.getPassword());
             }
-        } catch (SQLException sqle) {
-            throw new RuntimeException(sqle);
         } catch (ClassNotFoundException cnfe) {
-            throw new RuntimeException(cnfe);
+            throw new SQLException(cnfe);
         }
         return connection;
     }
 
-    public int executeUpdate(String sql) {
+    public int executeUpdate(String sql) throws SQLException {
         try (Statement statement = getConnection().createStatement()) {
             return statement.executeUpdate(sql);
         } catch (SQLException sqle) {
-            throw new RuntimeException(sqle);
+            throw new SQLException(sqle);
         }
     }
 
-    public void createAllTables() {
-        for (SQLTable table: tables.values()) {
-            String sql = table.getCreateTableStatement();
-            executeUpdate(sql);
+    public boolean createAllTables() {
+        try {
+            for (SQLTable table: tables.values()) {
+                String sql = table.getCreateTableStatement();
+                executeUpdate(sql);
+            }
+        } catch (SQLException sqle) {
+            sqle.printStackTrace();
+            return false;
         }
+        return true;
     }
 }

@@ -4,3 +4,4 @@ database:
     user: 'user'
     password: 'password'
     database: ''
+    prefix: ''

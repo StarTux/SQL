@@ -23,6 +23,7 @@ final class SQLColumn {
     private final int precision;
     private final SQLType type;
     private final boolean id;
+    private final boolean unique;
     private Method getterMethod;
     private Method setterMethod;
 
@@ -36,10 +37,12 @@ final class SQLColumn {
             this.nullable = columnAnnotation.nullable();
             this.length = columnAnnotation.length();
             this.precision = columnAnnotation.precision() > 0 ? columnAnnotation.precision() : 11;
+            this.unique = columnAnnotation.unique();
         } else {
             this.nullable = true;
             this.length = 255;
             this.precision = 11;
+            this.unique = false;
         }
         this.id = field.getAnnotation(Id.class) != null;
         type = SQLType.of(field);
@@ -98,9 +101,11 @@ final class SQLColumn {
     String getColumnDefinition() {
         if (columnDefinition == null || columnDefinition.isEmpty()) {
             if (id) {
-                columnDefinition = "int(" + precision + ") UNSIGNED AUTO_INCREMENT";
+                columnDefinition = getTypeDefinition() + " UNSIGNED AUTO_INCREMENT";
+            } else if (!nullable) {
+                columnDefinition = getTypeDefinition() + " NOT NULL";
             } else {
-                columnDefinition = getTypeDefinition() + (!nullable ? " NOT NULL" : " DEFAULT NULL");
+                columnDefinition = getTypeDefinition();
             }
         }
         return columnDefinition;
