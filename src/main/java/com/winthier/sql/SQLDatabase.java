@@ -25,16 +25,23 @@ public final class SQLDatabase {
 
     @Data
     final class Config {
-        private String host, port, database, prefix, user, password;
+        private String host = "", port = "", database = "", prefix = "", user = "", password = "";
 
         void load(ConfigurationSection c) {
-            final String name = SQLUtil.camelToLowerCase(plugin.getName());
-            host = c.getString("hostname", host);
-            port = c.getString("port", port);
-            database = c.getString("database", database).replace("{NAME}", name);
-            prefix = c.getString("prefix", prefix).replace("{NAME}", name);
-            user = c.getString("user", user);
-            password = c.getString("password", password);
+            final String name = plugin.getName();
+            final String lowerName = SQLUtil.camelToLowerCase(name);
+            String cHost = c.getString("host");
+            String cPort = c.getString("port");
+            String cDatabase = c.getString("database");
+            String cPrefix = c.getString("prefix");
+            String cUser = c.getString("user");
+            String cPassword = c.getString("password");
+            if (cHost != null && !cHost.isEmpty()) this.host = cHost;
+            if (cPort != null && !cPort.isEmpty()) this.port = cPort;
+            if (cDatabase != null && !cDatabase.isEmpty()) this.database = cDatabase.replace("{NAME}", name);
+            if (cPrefix != null && !cPrefix.isEmpty()) this.prefix = cPrefix.replace("{NAME}", lowerName);
+            if (cUser != null && !cUser.isEmpty()) this.user = cUser;
+            if (cPassword != null && !cPassword.isEmpty()) this.password = cPassword;
         }
 
         String getUrl() {
@@ -55,8 +62,8 @@ public final class SQLDatabase {
             config.setHost("127.0.0.1");
             config.setPort("3306");
             config.setDatabase(plugin.getName());
-            config.setUser("usr");
-            config.setPassword("pw");
+            config.setUser("user");
+            config.setPassword("password");
             config.load(SQLPlugin.getInstance().getConfig().getConfigurationSection("database"));
             config.load(getPluginDatabaseConfig());
         }
