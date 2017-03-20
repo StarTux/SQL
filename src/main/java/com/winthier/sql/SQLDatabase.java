@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
+import javax.persistence.PersistenceException;
 import lombok.Data;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -113,24 +114,27 @@ public final class SQLDatabase {
         return pluginConfig;
     }
 
-    public Connection getConnection() throws SQLException {
+    public Connection getConnection() {
         try {
             if (connection == null || !connection.isValid(1)) {
                 Class.forName("com.mysql.jdbc.Driver");
                 Config c = getConfig();
                 connection = DriverManager.getConnection(c.getUrl(), c.getUser(), c.getPassword());
             }
+        } catch (SQLException sqle) {
+            throw new PersistenceException(sqle);
         } catch (ClassNotFoundException cnfe) {
-            throw new SQLException(cnfe);
+            throw new PersistenceException(cnfe);
         }
         return connection;
     }
 
-    public int executeUpdate(String sql) throws SQLException {
-        try (Statement statement = getConnection().createStatement()) {
+    public int executeUpdate(String sql) {
+        try {
+            Statement statement = getConnection().createStatement();
             return statement.executeUpdate(sql);
         } catch (SQLException sqle) {
-            throw new SQLException(sqle);
+            throw new PersistenceException(sqle);
         }
     }
 
@@ -140,8 +144,8 @@ public final class SQLDatabase {
                 String sql = table.getCreateTableStatement();
                 executeUpdate(sql);
             }
-        } catch (SQLException sqle) {
-            sqle.printStackTrace();
+        } catch (PersistenceException pe) {
+            pe.printStackTrace();
             return false;
         }
         return true;

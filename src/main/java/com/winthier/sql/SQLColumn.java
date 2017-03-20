@@ -11,6 +11,7 @@ import java.util.UUID;
 import javax.persistence.Column;
 import javax.persistence.EntityNotFoundException;
 import javax.persistence.Id;
+import javax.persistence.PersistenceException;
 import javax.persistence.Version;
 import lombok.Getter;
 
@@ -69,7 +70,7 @@ final class SQLColumn {
             getterMethod = field.getDeclaringClass().getMethod(getterName);
             setterMethod = field.getDeclaringClass().getMethod(setterName, field.getType());
         } catch (NoSuchMethodException nsme) {
-            throw new RuntimeException(nsme);
+            throw new PersistenceException(nsme);
         }
     }
 
@@ -166,11 +167,11 @@ final class SQLColumn {
             }
             setterMethod.invoke(inst, value);
         } catch (SQLException sqle) {
-            throw new RuntimeException(sqle);
+            throw new PersistenceException(sqle);
         } catch (IllegalAccessException iae) {
-            throw new RuntimeException(iae);
+            throw new PersistenceException(iae);
         } catch (InvocationTargetException ite) {
-            throw new RuntimeException(ite);
+            throw new PersistenceException(ite);
         }
     }
 
@@ -219,9 +220,9 @@ final class SQLColumn {
         try {
             return getterMethod.invoke(inst);
         } catch (IllegalAccessException iae) {
-            throw new RuntimeException(iae);
+            throw new PersistenceException(iae);
         } catch (InvocationTargetException ite) {
-            throw new RuntimeException(ite);
+            throw new PersistenceException(ite);
         }
     }
 
@@ -229,9 +230,9 @@ final class SQLColumn {
         try {
             setterMethod.invoke(inst, value);
         } catch (IllegalAccessException iae) {
-            throw new RuntimeException(iae);
+            throw new PersistenceException(iae);
         } catch (InvocationTargetException ite) {
-            throw new RuntimeException(ite);
+            throw new PersistenceException(ite);
         }
     }
 }

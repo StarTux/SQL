@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import javax.persistence.OneToMany;
+import javax.persistence.PersistenceException;
 import javax.persistence.Table;
 import javax.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -134,7 +135,7 @@ public final class SQLTable<E> {
             result.next();
             return result.getInt("count");
         } catch (SQLException sqle) {
-            throw new RuntimeException(sqle);
+            throw new PersistenceException(sqle);
         }
     }
 
@@ -149,9 +150,9 @@ public final class SQLTable<E> {
             }
             return row;
         } catch (InstantiationException ie) {
-            throw new RuntimeException(ie);
+            throw new PersistenceException(ie);
         } catch (IllegalAccessException iae) {
-            throw new RuntimeException(iae);
+            throw new PersistenceException(iae);
         }
     }
 
@@ -197,7 +198,7 @@ public final class SQLTable<E> {
                 return -1;
             }
         } catch (SQLException sqle) {
-            throw new RuntimeException(sqle);
+            throw new PersistenceException(sqle);
         }
     }
 
@@ -214,7 +215,7 @@ public final class SQLTable<E> {
             result.close();
             return row;
         } catch (SQLException sqle) {
-            throw new RuntimeException(sqle);
+            throw new PersistenceException(sqle);
         }
     }
 
@@ -326,7 +327,7 @@ public final class SQLTable<E> {
                     return null;
                 }
             } catch (SQLException sqle) {
-                throw new RuntimeException(sqle);
+                throw new PersistenceException(sqle);
             }
         }
 
@@ -337,7 +338,7 @@ public final class SQLTable<E> {
                     list.add(createInstance(result));
                 }
             } catch (SQLException sqle) {
-                throw new RuntimeException(sqle);
+                throw new PersistenceException(sqle);
             }
             return list;
         }
