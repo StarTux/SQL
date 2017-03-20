@@ -5,11 +5,13 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.UUID;
 import javax.persistence.Column;
 import javax.persistence.EntityNotFoundException;
 import javax.persistence.Id;
+import javax.persistence.Version;
 import lombok.Getter;
 
 @Getter
@@ -24,6 +26,7 @@ final class SQLColumn {
     private final SQLType type;
     private final boolean id;
     private final boolean unique;
+    private final boolean version;
     private Method getterMethod;
     private Method setterMethod;
 
@@ -31,20 +34,21 @@ final class SQLColumn {
         this.table = table;
         this.field = field;
         Column columnAnnotation = field.getAnnotation(Column.class);
+        this.id = field.getAnnotation(Id.class) != null;
+        this.version = field.getAnnotation(Version.class) != null;
         if (columnAnnotation != null) {
             this.columnName = columnAnnotation.name();
             this.columnDefinition = columnAnnotation.columnDefinition();
-            this.nullable = columnAnnotation.nullable();
+            this.nullable = columnAnnotation.nullable() && !id && !version;
             this.length = columnAnnotation.length();
             this.precision = columnAnnotation.precision() > 0 ? columnAnnotation.precision() : 11;
             this.unique = columnAnnotation.unique();
         } else {
-            this.nullable = true;
+            this.nullable = !id && !version;
             this.length = 255;
             this.precision = 11;
             this.unique = false;
         }
-        this.id = field.getAnnotation(Id.class) != null;
         type = SQLType.of(field);
         if (columnName == null || columnName.isEmpty()) {
             if (type == SQLType.REFERENCE) {
@@ -191,6 +195,24 @@ final class SQLColumn {
                 values.add(value);
             }
         }
+    }
+
+    void createVersionSaveFragment(Object inst, List<String> fragments, List<Object> values) {
+        Object newValue;
+        Object oldValue = getValue(inst);
+        if (getType() == SQLType.INT) {
+            if (oldValue == null) {
+                newValue = 1;
+            } else {
+                newValue = (Integer)oldValue + 1;
+            }
+        } else if (getType() == SQLType.DATE) {
+            newValue = new Timestamp(System.currentTimeMillis());
+        } else {
+            newValue = oldValue;
+        }
+        fragments.add("`" + getColumnName() + "` = ?");
+        values.add(newValue);
     }
 
     Object getValue(Object inst) {

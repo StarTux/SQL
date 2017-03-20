@@ -24,6 +24,7 @@ public final class SQLTable<E> {
     private String tableName;
     private List<SQLColumn> columns;
     private SQLColumn idColumn;
+    private SQLColumn versionColumn;
     private List<Key> keys;
 
     @Value
@@ -60,6 +61,7 @@ public final class SQLTable<E> {
                 SQLColumn column = new SQLColumn(this, field);
                 columns.add(column);
                 if (column.isId()) idColumn = column;
+                if (column.isVersion()) versionColumn = column;
             }
         }
         return columns;
@@ -157,18 +159,26 @@ public final class SQLTable<E> {
         StringBuilder sb = new StringBuilder();
         String postFix;
         Integer idValue = idColumn == null ? null : (Integer)idColumn.getValue(inst);
+        List<Object> values = new ArrayList<>();
         if (idValue == null) {
             sb.append("INSERT INTO `" + getTableName() + "` SET ");
             postFix = "";
         } else {
             sb.append("UPDATE `" + getTableName() + "` SET ");
             postFix = " WHERE `" + idColumn.getColumnName() + "` = " + idValue;
+            if (versionColumn != null) {
+                postFix += " AND `" + versionColumn.getColumnName() + "` = ?";
+                values.add(versionColumn.getValue(inst));
+            }
         }
         List<String> fragments = new ArrayList<>();
-        List<Object> values = new ArrayList<>();
         for (SQLColumn column: getColumns()) {
             if (column == idColumn) continue;
+            if (column == versionColumn) continue;
             column.createSaveFragment(inst, fragments, values);
+        }
+        if (versionColumn != null) {
+            versionColumn.createVersionSaveFragment(inst, fragments, values);
         }
         sb.append(fragments.get(0));
         for (int i = 1; i < fragments.size(); ++i) sb.append(", ").append(fragments.get(i));
