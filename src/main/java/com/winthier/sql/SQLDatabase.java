@@ -7,6 +7,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import javax.persistence.PersistenceException;
@@ -101,6 +102,13 @@ public final class SQLDatabase {
         @SuppressWarnings("unchecked")
         SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
         return table.save(inst);
+    }
+
+    public void delete(Collection<?> col) {
+        if (col.isEmpty()) return;
+        @SuppressWarnings("unchecked")
+        SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
+        table.delete(col);
     }
 
     public ConfigurationSection getPluginDatabaseConfig() {

@@ -9,6 +9,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import javax.persistence.OneToMany;
@@ -202,8 +203,27 @@ public final class SQLTable<E> {
         }
     }
 
+    int delete(E inst) {
+        if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
+        Integer id = (Integer)idColumn.getValue(inst);
+        if (id == null) throw new PersistenceException("Id not set: " + inst);
+        return database.executeUpdate("DELETE * FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id);
+    }
+
+    int delete(Collection<E> col) {
+        if (col.isEmpty()) return -1;
+        if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
+        Iterator<E> iter = col.iterator();
+        StringBuilder sb = new StringBuilder();
+        sb.append((Integer)idColumn.getValue(iter.next()));
+        while (iter.hasNext()) {
+            sb.append(", ").append((Integer)idColumn.getValue(iter.next()));
+        }
+        return database.executeUpdate("DELETE * FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " IN (" + sb.toString() + ")");
+    }
+
     public E find(int id) {
-        if (idColumn == null) throw new IllegalStateException("No id column defined: " + clazz.getName());
+        if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
         try (Statement statement = database.getConnection().createStatement()) {
             ResultSet result = statement.executeQuery("SELECT * FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id);
             E row;
