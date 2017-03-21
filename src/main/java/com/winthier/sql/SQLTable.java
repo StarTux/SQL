@@ -157,7 +157,7 @@ public final class SQLTable<E> {
         }
     }
 
-    int save(E inst) {
+    public int save(E inst) {
         StringBuilder sb = new StringBuilder();
         String postFix;
         Integer idValue = idColumn == null ? null : (Integer)idColumn.getValue(inst);
@@ -203,23 +203,24 @@ public final class SQLTable<E> {
         }
     }
 
-    int delete(E inst) {
-        if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
-        Integer id = (Integer)idColumn.getValue(inst);
-        if (id == null) throw new PersistenceException("Id not set: " + inst);
-        return database.executeUpdate("DELETE * FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id);
-    }
-
-    int delete(Collection<E> col) {
-        if (col.isEmpty()) return -1;
-        if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
-        Iterator<E> iter = col.iterator();
-        StringBuilder sb = new StringBuilder();
-        sb.append((Integer)idColumn.getValue(iter.next()));
-        while (iter.hasNext()) {
-            sb.append(", ").append((Integer)idColumn.getValue(iter.next()));
+    public int delete(Object inst) {
+        if (inst instanceof Collection) {
+            Collection<?> col = (Collection<?>)inst;
+            if (col.isEmpty()) return -1;
+            if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
+            Iterator<?> iter = col.iterator();
+            StringBuilder sb = new StringBuilder();
+            sb.append((Integer)idColumn.getValue(iter.next()));
+            while (iter.hasNext()) {
+                sb.append(", ").append((Integer)idColumn.getValue(iter.next()));
+            }
+            return database.executeUpdate("DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " IN (" + sb.toString() + ")");
+        } else {
+            if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
+            Integer id = (Integer)idColumn.getValue(inst);
+            if (id == null) throw new PersistenceException("Id not set: " + inst);
+            return database.executeUpdate("DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id);
         }
-        return database.executeUpdate("DELETE * FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " IN (" + sb.toString() + ")");
     }
 
     public E find(int id) {

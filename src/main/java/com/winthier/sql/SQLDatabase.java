@@ -99,16 +99,35 @@ public final class SQLDatabase {
     }
 
     public int save(Object inst) {
-        @SuppressWarnings("unchecked")
-        SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-        return table.save(inst);
+        if (inst instanceof Collection) {
+            Collection<?> col = (Collection<?>)inst;
+            if (col.isEmpty()) return 0;
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
+            int result = 0;
+            for (Object o: col) {
+                result += table.save(o);
+            }
+            return result;
+        } else {
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
+            return table.save(inst);
+        }
     }
 
-    public void delete(Collection<?> col) {
-        if (col.isEmpty()) return;
-        @SuppressWarnings("unchecked")
-        SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
-        table.delete(col);
+    public int delete(Object inst) {
+        if (inst instanceof Collection) {
+            Collection<?> col = (Collection<?>)inst;
+            if (col.isEmpty()) return 0;
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
+            return table.delete(col);
+        } else {
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
+            return table.delete(inst);
+        }
     }
 
     public ConfigurationSection getPluginDatabaseConfig() {
