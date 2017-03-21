@@ -1,5 +1,6 @@
 package com.winthier.sql;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -95,7 +96,7 @@ final class SQLColumn {
         case BOOL:
             return "tinyint(1)";
         case ENUM:
-            return "varchar(40)";
+            return "int(11)";
         case REFERENCE:
             return "int(11) unsigned";
         default:
@@ -136,22 +137,23 @@ final class SQLColumn {
                 value = result.getObject(getColumnName(), java.sql.Timestamp.class);
                 break;
             case ENUM:
-                str = result.getString(getColumnName());
-                if (str == null) {
+                int num = result.getInt(getColumnName());
+                if (result.wasNull()) {
                     value = null;
                 } else {
                     try {
-                        @SuppressWarnings({"unchecked", "rawtypes"})
-                        final Enum<?> theEnum = Enum.valueOf((Class<? extends Enum>)field.getType(), str);
-                        value = theEnum;
-                    } catch (IllegalArgumentException iae) {
-                        iae.printStackTrace();
+                        Method method = field.getType().getMethod("values");
+                        Object arr = method.invoke(null);
+                        value = Array.get(arr, num);
+                    } catch (Exception e) {
+                        // TODO better error handling!
+                        e.printStackTrace();
                         value = null;
                     }
                 }
                 break;
             case REFERENCE:
-                int num = result.getInt(getColumnName());
+                num = result.getInt(getColumnName());
                 if (result.wasNull()) {
                     value = null;
                 } else {
@@ -192,6 +194,8 @@ final class SQLColumn {
                 Object refId = refTable.getIdColumn().getValue(value);
                 if (refId == null) throw new NullPointerException("Referenced table has no id: " + value.getClass().getName() + ": " + value);
                 values.add(refId);
+            } else if (type == SQLType.ENUM) {
+                values.add(((Enum)value).ordinal());
             } else {
                 values.add(value);
             }
