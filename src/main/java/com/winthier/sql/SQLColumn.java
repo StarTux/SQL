@@ -98,7 +98,7 @@ final class SQLColumn {
         case ENUM:
             return "int(11)";
         case REFERENCE:
-            return "int(11) unsigned";
+            return "int(11)";
         default:
             throw new IllegalArgumentException("Type definition not implemented: " + type);
         }
@@ -107,7 +107,7 @@ final class SQLColumn {
     String getColumnDefinition() {
         if (columnDefinition == null || columnDefinition.isEmpty()) {
             if (id) {
-                columnDefinition = getTypeDefinition() + " UNSIGNED AUTO_INCREMENT";
+                columnDefinition = getTypeDefinition() + " AUTO_INCREMENT";
             } else if (!nullable) {
                 columnDefinition = getTypeDefinition() + " NOT NULL";
             } else {
