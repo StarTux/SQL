@@ -77,7 +77,8 @@ public final class SQLUtil {
             } else if (value instanceof Enum) {
                 statement.setString(index, ((Enum)value).name());
             } else {
-                throw new IllegalArgumentException("Unexpected type: " + value.getClass().getName());
+                String name = value == null ? "null" : value.getClass().getName();
+                throw new IllegalArgumentException("Unexpected type in '" + statement + "': " + name + ", " + values + ", ArrayIndex=" + i);
             }
         }
     }
