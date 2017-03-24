@@ -205,13 +205,13 @@ final class SQLColumn {
     void createVersionSaveFragment(Object inst, List<String> fragments, List<Object> values) {
         Object newValue;
         Object oldValue = getValue(inst);
-        if (getType() == SQLType.INT) {
+        if (type == SQLType.INT) {
             if (oldValue == null) {
                 newValue = 1;
             } else {
                 newValue = (Integer)oldValue + 1;
             }
-        } else if (getType() == SQLType.DATE) {
+        } else if (type == SQLType.DATE) {
             newValue = new Timestamp(System.currentTimeMillis());
         } else {
             newValue = oldValue;
