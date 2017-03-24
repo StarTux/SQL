@@ -168,19 +168,20 @@ public final class SQLTable<E> {
         } else {
             sb.append("UPDATE `" + getTableName() + "` SET ");
             postFix = " WHERE `" + idColumn.getColumnName() + "` = " + idValue;
-            if (versionColumn != null) {
-                postFix += " AND `" + versionColumn.getColumnName() + "` = ?";
-                values.add(versionColumn.getValue(inst));
-            }
         }
         List<String> fragments = new ArrayList<>();
         for (SQLColumn column: getColumns()) {
-            if (column == idColumn) continue;
-            if (column == versionColumn) continue;
+            if (column.isId()) continue;
+            if (column.isVersion()) continue;
             column.createSaveFragment(inst, fragments, values);
         }
         if (versionColumn != null) {
             versionColumn.createVersionSaveFragment(inst, fragments, values);
+            Object value = versionColumn.getValue(inst);
+            if (value != null) {
+                postFix += " AND `" + versionColumn.getColumnName() + "` = ?";
+                values.add(value);
+            }
         }
         sb.append(fragments.get(0));
         for (int i = 1; i < fragments.size(); ++i) sb.append(", ").append(fragments.get(i));
