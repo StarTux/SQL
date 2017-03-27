@@ -24,10 +24,12 @@ public final class SQLDatabase {
     private final Map<Class<?>, SQLTable<?>> tables = new HashMap<>();
     private static final String SQL_CONFIG_FILE = "sql.yml";
     private String tablePrefix;
+    private boolean debug;
 
     @Data
     final class Config {
         private String host = "", port = "", database = "", prefix = "", user = "", password = "";
+        private boolean debug;
 
         void load(ConfigurationSection c) {
             final String name = plugin.getName();
@@ -44,6 +46,7 @@ public final class SQLDatabase {
             if (cPrefix != null && !cPrefix.isEmpty()) this.prefix = cPrefix.replace("{NAME}", lowerName);
             if (cUser != null && !cUser.isEmpty()) this.user = cUser;
             if (cPassword != null && !cPassword.isEmpty()) this.password = cPassword;
+            this.debug = c.getBoolean("debug");
         }
 
         String getUrl() {
@@ -146,6 +149,8 @@ public final class SQLDatabase {
             if (connection == null || !connection.isValid(1)) {
                 Class.forName("com.mysql.jdbc.Driver");
                 Config c = getConfig();
+                this.debug = c.isDebug();
+                debugLog(c);
                 connection = DriverManager.getConnection(c.getUrl(), c.getUser(), c.getPassword());
             }
         } catch (SQLException sqle) {
@@ -159,6 +164,7 @@ public final class SQLDatabase {
     public int executeUpdate(String sql) {
         try {
             Statement statement = getConnection().createStatement();
+            debugLog(sql);
             return statement.executeUpdate(sql);
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
@@ -169,6 +175,7 @@ public final class SQLDatabase {
         try {
             for (SQLTable table: tables.values()) {
                 String sql = table.getCreateTableStatement();
+                debugLog(sql);
                 executeUpdate(sql);
             }
         } catch (PersistenceException pe) {
@@ -176,5 +183,10 @@ public final class SQLDatabase {
             return false;
         }
         return true;
+    }
+
+    void debugLog(Object o) {
+        if (!debug) return;
+        plugin.getLogger().info("[SQL] " + o);
     }
 }

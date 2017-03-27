@@ -133,7 +133,9 @@ public final class SQLTable<E> {
 
     public int getRowCount() {
         try (Statement statement = database.getConnection().createStatement()) {
-            ResultSet result = statement.executeQuery("SELECT COUNT(*) `count` FROM `" + getTableName() + "`");
+            String sql = "SELECT COUNT(*) `count` FROM `" + getTableName() + "`";
+            database.debugLog(sql);
+            ResultSet result = statement.executeQuery(sql);
             result.next();
             return result.getInt("count");
         } catch (SQLException sqle) {
@@ -193,6 +195,7 @@ public final class SQLTable<E> {
         }
         try (PreparedStatement statement = database.getConnection().prepareStatement(sb.toString(), Statement.RETURN_GENERATED_KEYS)) {
             SQLUtil.formatStatement(statement, values);
+            database.debugLog(statement);
             int ret = statement.executeUpdate();
             if (ret != 1) throw new OptimisticLockException("Failed to save row " + getTableName() + ": " + inst + ": " + statement);
             if (idColumn != null && idValue == null) {
@@ -233,7 +236,9 @@ public final class SQLTable<E> {
     public E find(int id) {
         if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
         try (Statement statement = database.getConnection().createStatement()) {
-            ResultSet result = statement.executeQuery("SELECT * FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id);
+            String sql = "SELECT * FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id;
+            database.debugLog(sql);
+            ResultSet result = statement.executeQuery(sql);
             E row;
             if (result.next()) {
                 row = createInstance(result);
@@ -348,7 +353,9 @@ public final class SQLTable<E> {
 
         public E findUnique() {
             limit(1);
-            try (ResultSet result = getSelectStatement().executeQuery()) {
+            try (PreparedStatement statement = getSelectStatement()) {
+                database.debugLog(statement);
+                ResultSet result = statement.executeQuery();
                 if (result.next()) {
                     return createInstance(result);
                 } else {
@@ -361,7 +368,9 @@ public final class SQLTable<E> {
 
         public List<E> findList() {
             List<E> list = new ArrayList<>();
-            try (ResultSet result = getSelectStatement().executeQuery()) {
+            try (PreparedStatement statement = getSelectStatement()) {
+                database.debugLog(statement);
+                ResultSet result = statement.executeQuery();
                 while (result.next()) {
                     list.add(createInstance(result));
                 }
