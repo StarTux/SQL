@@ -202,10 +202,10 @@ final class SQLColumn {
         }
     }
 
-    void createVersionSaveFragment(Object inst, List<String> fragments, List<Object> values) {
+    void updateVersionValue(Object inst) {
         Object newValue;
-        Object oldValue = getValue(inst);
         if (type == SQLType.INT) {
+            Object oldValue = getValue(inst);
             if (oldValue == null) {
                 newValue = 1;
             } else {
@@ -214,10 +214,9 @@ final class SQLColumn {
         } else if (type == SQLType.DATE) {
             newValue = new Timestamp(System.currentTimeMillis());
         } else {
-            newValue = oldValue;
+            throw new PersistenceException("Unsupported version type: " + field.getType());
         }
-        fragments.add("`" + getColumnName() + "` = ?");
-        values.add(newValue);
+        setValue(inst, newValue);
     }
 
     Object getValue(Object inst) {

@@ -13,6 +13,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import javax.persistence.OneToMany;
+import javax.persistence.OptimisticLockException;
 import javax.persistence.PersistenceException;
 import javax.persistence.Table;
 import javax.persistence.UniqueConstraint;
@@ -159,46 +160,51 @@ public final class SQLTable<E> {
 
     public int save(E inst) {
         StringBuilder sb = new StringBuilder();
-        String postFix;
+        final String idCheck, versionCheck;
         Integer idValue = idColumn == null ? null : (Integer)idColumn.getValue(inst);
         List<Object> values = new ArrayList<>();
         if (idValue == null) {
             sb.append("INSERT INTO `" + getTableName() + "` SET ");
-            postFix = "";
+            idCheck = null;
         } else {
             sb.append("UPDATE `" + getTableName() + "` SET ");
-            postFix = " WHERE `" + idColumn.getColumnName() + "` = " + idValue;
+            idCheck = " WHERE `" + idColumn.getColumnName() + "` = " + idValue;
         }
+        Object versionValue = versionColumn == null ? null : versionColumn.getValue(inst);
+        if (versionValue != null) {
+            versionCheck = " AND `" + versionColumn.getColumnName() + "` = ?";
+        } else {
+            versionCheck = null;
+        }
+        if (versionColumn != null) versionColumn.updateVersionValue(inst);
         List<String> fragments = new ArrayList<>();
         for (SQLColumn column: getColumns()) {
             if (column.isId()) continue;
-            if (column.isVersion()) continue;
             column.createSaveFragment(inst, fragments, values);
-        }
-        if (versionColumn != null) {
-            versionColumn.createVersionSaveFragment(inst, fragments, values);
-            Object value = versionColumn.getValue(inst);
-            if (value != null) {
-                postFix += " AND `" + versionColumn.getColumnName() + "` = ?";
-                values.add(value);
-            }
         }
         sb.append(fragments.get(0));
         for (int i = 1; i < fragments.size(); ++i) sb.append(", ").append(fragments.get(i));
-        sb.append(postFix);
+        if (idCheck != null) {
+            sb.append(idCheck);
+        }
+        if (versionCheck != null) {
+            sb.append(versionCheck);
+            values.add(versionValue);
+        }
         try (PreparedStatement statement = database.getConnection().prepareStatement(sb.toString(), Statement.RETURN_GENERATED_KEYS)) {
             SQLUtil.formatStatement(statement, values);
-            statement.executeUpdate();
-            ResultSet result = statement.getGeneratedKeys();
-            if (result.next()) {
-                int newId = result.getInt(1);
-                if (idColumn != null) {
-                    idColumn.setValue(inst, newId);
+            int ret = statement.executeUpdate();
+            if (ret != 1) throw new OptimisticLockException("Failed to save row " + getTableName() + ": " + inst + ": " + statement);
+            if (idColumn != null && idValue == null) {
+                ResultSet result = statement.getGeneratedKeys();
+                if (result.next()) {
+                    int newId = result.getInt(1);
+                    if (idColumn != null) {
+                        idColumn.setValue(inst, newId);
+                    }
                 }
-                return newId;
-            } else {
-                return -1;
             }
+            return ret;
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
         }
