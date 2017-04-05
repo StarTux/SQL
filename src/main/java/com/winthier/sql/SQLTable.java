@@ -276,6 +276,7 @@ public final class SQLTable<E> {
         private String conj = " WHERE ";
         private int limit = -1;
         private final List<String> order = new ArrayList<>();
+        private static final String DEFAULT_CONJ = " AND ";
 
         Finder() {
             sb.append("SELECT * FROM `" + getTableName() + "`");
@@ -288,7 +289,7 @@ public final class SQLTable<E> {
             String columnName = column.getColumnName();
             sb.append(conj).append("`").append(columnName).append("`").append(" " + comp.symbol + " ?");
             values.add(value);
-            conj = " AND ";
+            conj = DEFAULT_CONJ;
             return this;
         }
 
@@ -333,6 +334,15 @@ public final class SQLTable<E> {
                 values.add(iter.next());
             }
             sb.append(")");
+            conj = DEFAULT_CONJ;
+            return this;
+        }
+
+        public Finder isNull(String label) {
+            SQLColumn column = getColumn(label);
+            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
+            sb.append(conj).append("`").append(column.getColumnName()).append("` IS NULL");
+            conj = DEFAULT_CONJ;
             return this;
         }
 
