@@ -290,7 +290,14 @@ public final class SQLTable<E> {
             if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
             String columnName = column.getColumnName();
             sb.append(conj).append("`").append(columnName).append("`").append(" " + comp.symbol + " ?");
-            values.add(value);
+            if (column.getType() == SQLType.REFERENCE) {
+                SQLTable refTable = database.getTable(column.getField().getType());
+                if (refTable == null) throw new PersistenceException("Table not registered: " + column.getField().getType().getName());
+                if (refTable.idColumn == null) throw new PersistenceException("Referenced table lacks id column: " + refTable.getTableName());
+                values.add(refTable.idColumn.getValue(value));
+            } else {
+                values.add(value);
+            }
             conj = DEFAULT_CONJ;
             return this;
         }
