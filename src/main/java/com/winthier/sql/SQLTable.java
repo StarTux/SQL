@@ -320,6 +320,22 @@ public final class SQLTable<E> {
             return compare(label, Comparison.LIKE, value);
         }
 
+        public Finder in(String label, Collection<?> col) {
+            SQLColumn column = getColumn(label);
+            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
+            String columnName = column.getColumnName();
+            Iterator<?> iter = col.iterator();
+            if (!iter.hasNext()) return this;
+            sb.append(conj).append("`").append(columnName).append("`").append(" IN (?");
+            values.add(iter.next());
+            while (iter.hasNext()) {
+                sb.append(", ?");
+                values.add(iter.next());
+            }
+            sb.append(")");
+            return this;
+        }
+
         public Finder or() {
             conj = " OR ";
             return this;
