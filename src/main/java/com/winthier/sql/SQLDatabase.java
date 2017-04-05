@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Collection;
@@ -166,6 +167,16 @@ public final class SQLDatabase {
             Statement statement = getConnection().createStatement();
             debugLog(sql);
             return statement.executeUpdate(sql);
+        } catch (SQLException sqle) {
+            throw new PersistenceException(sqle);
+        }
+    }
+
+    public ResultSet executeQuery(String sql) {
+        try {
+            Statement statement = getConnection().createStatement();
+            debugLog(sql);
+            return statement.executeQuery(sql);
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
         }
