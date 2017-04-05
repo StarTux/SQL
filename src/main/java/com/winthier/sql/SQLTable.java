@@ -335,7 +335,12 @@ public final class SQLTable<E> {
             if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
             String columnName = column.getColumnName();
             Iterator<?> iter = col.iterator();
-            if (!iter.hasNext()) return this;
+            if (!iter.hasNext()) {
+                sb.append(conj).append("`").append(columnName).append("`").append(" != `")
+                    .append("`").append(columnName).append("`");
+                conj = DEFAULT_CONJ;
+                return this;
+            }
             sb.append(conj).append("`").append(columnName).append("`").append(" IN (?");
             values.add(iter.next());
             while (iter.hasNext()) {
