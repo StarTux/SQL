@@ -43,7 +43,7 @@ public final class SQLDatabase {
             if (cHost != null && !cHost.isEmpty()) this.host = cHost;
             if (cPort != null && !cPort.isEmpty()) this.port = cPort;
             if (cDatabase != null && !cDatabase.isEmpty()) this.database = cDatabase.replace("{NAME}", name);
-            if (cPrefix != null && !cPrefix.isEmpty()) this.prefix = cPrefix.replace("{NAME}", lowerName);
+            if (cPrefix != null) this.prefix = cPrefix.replace("{NAME}", lowerName);
             if (cUser != null && !cUser.isEmpty()) this.user = cUser;
             if (cPassword != null && !cPassword.isEmpty()) this.password = cPassword;
             this.debug = c.getBoolean("debug");
@@ -175,7 +175,6 @@ public final class SQLDatabase {
         try {
             for (SQLTable table: tables.values()) {
                 String sql = table.getCreateTableStatement();
-                debugLog(sql);
                 executeUpdate(sql);
             }
         } catch (PersistenceException pe) {
