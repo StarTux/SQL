@@ -58,6 +58,8 @@ public final class SQLTable<E> {
             columns = new ArrayList<>();
             for (Field field: clazz.getDeclaredFields()) {
                 if (Modifier.isTransient(field.getModifiers())
+                    || Modifier.isStatic(field.getModifiers())
+                    || Modifier.isFinal(field.getModifiers())
                     || field.getAnnotation(OneToMany.class) != null
                     || Collection.class.isAssignableFrom(field.getType())
                     || Map.class.isAssignableFrom(field.getType())) continue;
