@@ -280,9 +280,7 @@ public final class SQLTable<E> {
         private final List<String> order = new ArrayList<>();
         private static final String DEFAULT_CONJ = " AND ";
 
-        Finder() {
-            sb.append("SELECT * FROM `" + getTableName() + "`");
-        }
+        Finder() { }
 
         private Finder compare(String label, Comparison comp, Object value) {
             if (value == null) throw new IllegalArgumentException("Value cannot be null!");
@@ -420,6 +418,18 @@ public final class SQLTable<E> {
             return list;
         }
 
+        public int findRowCount() {
+            List<E> list = new ArrayList<>();
+            try (PreparedStatement statement = getRowCountStatement()) {
+                database.debugLog(statement);
+                ResultSet result = statement.executeQuery();
+                result.next();
+                return result.getInt("row_count");
+            } catch (SQLException sqle) {
+                throw new PersistenceException(sqle);
+            }
+        }
+
         PreparedStatement getSelectStatement() throws SQLException {
             if (!order.isEmpty()) {
                 sb.append(" ORDER BY ").append(order.get(0));
@@ -430,7 +440,15 @@ public final class SQLTable<E> {
             if (limit > 0) {
                 sb.append(" LIMIT " + limit);
             }
-            PreparedStatement statement = database.getConnection().prepareStatement(sb.toString());
+            String sql = "SELECT * FROM `" + getTableName() + "`" + sb.toString();
+            PreparedStatement statement = database.getConnection().prepareStatement(sql);
+            SQLUtil.formatStatement(statement, values);
+            return statement;
+        }
+
+        PreparedStatement getRowCountStatement() throws SQLException {
+            String sql = "SELECT count(*) row_count FROM `" + getTableName() + "`" + sb.toString();
+            PreparedStatement statement = database.getConnection().prepareStatement(sql);
             SQLUtil.formatStatement(statement, values);
             return statement;
         }
