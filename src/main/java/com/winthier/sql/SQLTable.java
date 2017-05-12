@@ -345,8 +345,7 @@ public final class SQLTable<E> {
             String columnName = column.getColumnName();
             Iterator<?> iter = col.iterator();
             if (!iter.hasNext()) {
-                sb.append(conj).append("`").append(columnName).append("`").append(" != `")
-                    .append("`").append(columnName).append("`");
+                sb.append(conj).append("`").append(columnName).append("`").append(" != `").append(columnName).append("`");
                 conj = DEFAULT_CONJ;
                 return this;
             }
