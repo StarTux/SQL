@@ -351,10 +351,18 @@ public final class SQLTable<E> {
                 return this;
             }
             sb.append(conj).append("`").append(columnName).append("`").append(" IN (?");
-            values.add(iter.next());
+            if (column.getType() == SQLType.REFERENCE) {
+                values.add(database.getTable(column.getField().getType()).idColumn.getValue(iter.next()));
+            } else {
+                values.add(iter.next());
+            }
             while (iter.hasNext()) {
                 sb.append(", ?");
-                values.add(iter.next());
+                if (column.getType() == SQLType.REFERENCE) {
+                    values.add(database.getTable(column.getField().getType()).idColumn.getValue(iter.next()));
+                } else {
+                    values.add(iter.next());
+                }
             }
             sb.append(")");
             conj = DEFAULT_CONJ;
