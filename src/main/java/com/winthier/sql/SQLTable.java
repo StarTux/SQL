@@ -276,7 +276,7 @@ public final class SQLTable<E> {
         private final StringBuilder sb = new StringBuilder();
         private final List<Object> values = new ArrayList<>();
         private String conj = " WHERE ";
-        private int limit = -1;
+        private int offset = -1, limit = -1;
         private final List<String> order = new ArrayList<>();
         private static final String DEFAULT_CONJ = " AND ";
 
@@ -300,7 +300,18 @@ public final class SQLTable<E> {
             return this;
         }
 
+        public Finder idEq(int id) {
+            if (idColumn == null) throw new IllegalArgumentException("idEq() requires id column!");
+            sb.append(conj).append("`").append(idColumn.getColumnName()).append("` = ").append(id);
+            conj = DEFAULT_CONJ;
+            return this;
+        }
+
         public Finder eq(String label, Object value) {
+            return compare(label, Comparison.EQ, value);
+        }
+
+        public Finder ieq(String label, String value) {
             return compare(label, Comparison.EQ, value);
         }
 
@@ -375,6 +386,11 @@ public final class SQLTable<E> {
             return this;
         }
 
+        public Finder offset(int newOffset) {
+            offset = newOffset;
+            return this;
+        }
+
         public Finder orderByAscending(String label) {
             orderBy(label, "ASC");
             return this;
@@ -439,6 +455,7 @@ public final class SQLTable<E> {
             }
             if (limit > 0) {
                 sb.append(" LIMIT " + limit);
+                if (offset > -1) sb.append(" OFFSET " + offset);
             }
             String sql = "SELECT * FROM `" + getTableName() + "`" + sb.toString();
             PreparedStatement statement = database.getConnection().prepareStatement(sql);
