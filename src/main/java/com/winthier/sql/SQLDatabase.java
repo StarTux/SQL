@@ -145,7 +145,7 @@ public final class SQLDatabase {
         return pluginConfig;
     }
 
-    public Connection getConnection() {
+    public synchronized Connection getConnection() {
         try {
             if (connection == null || !connection.isValid(1)) {
                 Class.forName("com.mysql.jdbc.Driver");
