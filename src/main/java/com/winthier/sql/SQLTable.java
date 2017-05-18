@@ -376,6 +376,14 @@ public final class SQLTable<E> {
             return this;
         }
 
+        public Finder isNotNull(String label) {
+            SQLColumn column = getColumn(label);
+            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
+            sb.append(conj).append("`").append(column.getColumnName()).append("` IS NOT NULL");
+            conj = DEFAULT_CONJ;
+            return this;
+        }
+
         public Finder or() {
             conj = " OR ";
             return this;
