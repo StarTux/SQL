@@ -212,7 +212,7 @@ final class SQLColumn {
                 newValue = (Integer)oldValue + 1;
             }
         } else if (type == SQLType.DATE) {
-            newValue = new Timestamp(System.currentTimeMillis());
+            newValue = new Timestamp((System.currentTimeMillis() / 1000L) * 1000L);
         } else {
             throw new PersistenceException("Unsupported version type: " + field.getType());
         }
