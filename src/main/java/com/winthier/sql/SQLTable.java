@@ -162,13 +162,25 @@ public final class SQLTable<E> {
         }
     }
 
+    public int saveIgnore(E inst) {
+        return save(inst, true);
+    }
+
     public int save(E inst) {
+        return save(inst, false);
+    }
+
+    private int save(E inst, boolean doIgnore) {
         StringBuilder sb = new StringBuilder();
         final String idCheck, versionCheck;
         Integer idValue = idColumn == null ? null : (Integer)idColumn.getValue(inst);
         List<Object> values = new ArrayList<>();
         if (idValue == null) {
-            sb.append("INSERT INTO `" + getTableName() + "` SET ");
+            if (doIgnore) {
+                sb.append("INSERT IGNORE INTO `" + getTableName() + "` SET ");
+            } else {
+                sb.append("INSERT INTO `" + getTableName() + "` SET ");
+            }
             idCheck = null;
         } else {
             sb.append("UPDATE `" + getTableName() + "` SET ");
