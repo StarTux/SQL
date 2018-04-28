@@ -102,6 +102,24 @@ public final class SQLDatabase {
         return getTable(clazz).find(id);
     }
 
+    public int saveIgnore(Object inst) {
+        if (inst instanceof Collection) {
+            Collection<?> col = (Collection<?>)inst;
+            if (col.isEmpty()) return 0;
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
+            int result = 0;
+            for (Object o: col) {
+                result += table.saveIgnore(o);
+            }
+            return result;
+        } else {
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
+            return table.saveIgnore(inst);
+        }
+    }
+
     public int save(Object inst) {
         if (inst instanceof Collection) {
             Collection<?> col = (Collection<?>)inst;
