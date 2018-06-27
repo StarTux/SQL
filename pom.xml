@@ -4,7 +4,7 @@
   <groupId>com.winthier.sql</groupId>
   <artifactId>sql</artifactId>
   <packaging>jar</packaging>
-  <version>0.1</version>
+  <version>0.1-SNAPSHOT</version>
   <name>SQL</name>
   <url>http://www.winthier.com</url>
   <repositories>
