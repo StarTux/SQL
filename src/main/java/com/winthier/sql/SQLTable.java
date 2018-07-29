@@ -461,6 +461,15 @@ public final class SQLTable<E> {
             return list;
         }
 
+        public int delete() {
+            try (PreparedStatement statement = getDeleteStatement()) {
+                database.debugLog(statement);
+                return statement.executeUpdate();
+            } catch (SQLException sqle) {
+                throw new PersistenceException(sqle);
+            }
+        }
+
         public int findRowCount() {
             List<E> list = new ArrayList<>();
             try (PreparedStatement statement = getRowCountStatement()) {
@@ -485,6 +494,13 @@ public final class SQLTable<E> {
                 if (offset > -1) sb.append(" OFFSET " + offset);
             }
             String sql = "SELECT * FROM `" + getTableName() + "`" + sb.toString();
+            PreparedStatement statement = database.getConnection().prepareStatement(sql);
+            SQLUtil.formatStatement(statement, values);
+            return statement;
+        }
+
+        PreparedStatement getDeleteStatement() throws SQLException {
+            String sql = "DELETE FROM `" + getTableName() + "`" + sb.toString();
             PreparedStatement statement = database.getConnection().prepareStatement(sql);
             SQLUtil.formatStatement(statement, values);
             return statement;
