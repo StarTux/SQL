@@ -47,7 +47,7 @@ public final class SQLDatabase {
             if (cPrefix != null) this.prefix = cPrefix.replace("{NAME}", lowerName);
             if (cUser != null && !cUser.isEmpty()) this.user = cUser;
             if (cPassword != null && !cPassword.isEmpty()) this.password = cPassword;
-            this.debug = c.getBoolean("debug");
+            if (c.isSet("debug")) this.debug = c.getBoolean("debug");
         }
 
         String getUrl() {
