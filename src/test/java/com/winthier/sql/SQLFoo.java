@@ -5,6 +5,7 @@ import java.util.Random;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
+import javax.persistence.Index;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
 import javax.persistence.Version;
@@ -13,7 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "foo")
+@Table(name = "foo", indexes = @Index(columnList = "time,bar"))
 @Getter
 @Setter
 @NoArgsConstructor

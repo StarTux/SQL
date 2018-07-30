@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import javax.persistence.Index;
 import javax.persistence.OneToMany;
 import javax.persistence.OptimisticLockException;
 import javax.persistence.PersistenceException;
@@ -32,11 +33,12 @@ public final class SQLTable<E> {
 
     @Value
     static class Key {
+        private boolean unique;
         private String name;
         private List<SQLColumn> columns;
 
         static Key of(SQLColumn column) {
-            return new Key(column.getColumnName(), Arrays.asList(column));
+            return new Key(true, column.getColumnName(), Arrays.asList(column));
         }
     }
 
@@ -92,7 +94,25 @@ public final class SQLTable<E> {
                                 constraintColumns.add(column);
                             }
                         }
-                        keys.add(new Key(name, constraintColumns));
+                        keys.add(new Key(true, name, constraintColumns));
+                    }
+                }
+                Index[] indexes = tableAnnotation.indexes();
+                if (indexes != null) {
+                    int counter = 0;
+                    for (Index index: indexes) {
+                        counter += 1;
+                        String name = "key_" + getTableName() + "_" + counter;
+                        List<SQLColumn> indexColumns = new ArrayList<>();
+                        for (String columnName: index.columnList().split(", ?")) {
+                            SQLColumn column = getColumn(columnName);
+                            if (column == null) {
+                                throw new IllegalArgumentException(clazz.getName() + ": Column for index not found: " + columnName);
+                            } else {
+                                indexColumns.add(column);
+                            }
+                        }
+                        keys.add(new Key(index.unique(), name, indexColumns));
                     }
                 }
             }
@@ -121,7 +141,11 @@ public final class SQLTable<E> {
         }
         if (idColumn != null) sb.append(",\n  PRIMARY KEY (`").append(idColumn.getColumnName()).append("`)");
         for (Key key: getKeys()) {
-            sb.append(",\n  UNIQUE KEY `").append(key.getName()).append("` (`");
+            if (key.isUnique()) {
+                sb.append(",\n  UNIQUE KEY `").append(key.getName()).append("` (`");
+            } else {
+                sb.append(",\n  KEY `").append(key.getName()).append("` (`");
+            }
             List<SQLColumn> keyColumns = key.getColumns();
             sb.append(keyColumns.get(0).getColumnName());
             for (int i = 1; i < keyColumns.size(); ++i) {
