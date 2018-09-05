@@ -141,6 +141,12 @@ public final class SQLDatabase {
         }
     }
 
+    public int save(Object inst, String... fields) {
+        @SuppressWarnings("unchecked")
+        SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
+        return table.save(inst, fields);
+    }
+
     public int delete(Object inst) {
         if (inst instanceof Collection) {
             Collection<?> col = (Collection<?>)inst;

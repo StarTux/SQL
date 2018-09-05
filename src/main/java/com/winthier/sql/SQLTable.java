@@ -187,14 +187,18 @@ public final class SQLTable<E> {
     }
 
     public int saveIgnore(E inst) {
-        return save(inst, true);
+        return save(inst, true, null);
     }
 
     public int save(E inst) {
-        return save(inst, false);
+        return save(inst, false, null);
     }
 
-    private int save(E inst, boolean doIgnore) {
+    public int save(E inst, String... fields) {
+        return save(inst, false, Arrays.asList(fields));
+    }
+
+    private int save(E inst, boolean doIgnore, List<String> fields) {
         StringBuilder sb = new StringBuilder();
         final String idCheck, versionCheck;
         Integer idValue = idColumn == null ? null : (Integer)idColumn.getValue(inst);
@@ -218,9 +222,16 @@ public final class SQLTable<E> {
         }
         if (versionColumn != null) versionColumn.updateVersionValue(inst);
         List<String> fragments = new ArrayList<>();
+        if (fields != null) {
+            for (String field: fields) {
+                if (getColumn(field) == null) throw new PersistenceException("Field not found: " + tableName + "." + field);
+            }
+        }
         for (SQLColumn column: getColumns()) {
             if (column.isId()) continue;
-            column.createSaveFragment(inst, fragments, values);
+            if (column.isVersion() || fields == null || fields.contains(column.getColumnName()) || fields.contains(column.getField().getName())) {
+                column.createSaveFragment(inst, fragments, values);
+            }
         }
         sb.append(fragments.get(0));
         for (int i = 1; i < fragments.size(); ++i) sb.append(", ").append(fragments.get(i));
