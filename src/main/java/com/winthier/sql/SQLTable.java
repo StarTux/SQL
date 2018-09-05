@@ -211,7 +211,7 @@ public final class SQLTable<E> {
             idCheck = " WHERE `" + idColumn.getColumnName() + "` = " + idValue;
         }
         Object versionValue = versionColumn == null ? null : versionColumn.getValue(inst);
-        if (versionValue != null) {
+        if (database.isOptimisticLocking() && versionValue != null) {
             versionCheck = " AND `" + versionColumn.getColumnName() + "` = ?";
         } else {
             versionCheck = null;

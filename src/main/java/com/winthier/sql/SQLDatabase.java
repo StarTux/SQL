@@ -26,11 +26,13 @@ public final class SQLDatabase {
     private static final String SQL_CONFIG_FILE = "sql.yml";
     private String tablePrefix;
     private boolean debug;
+    @Getter private boolean optimisticLocking;
 
     @Data
     final class Config {
         private String host = "", port = "", database = "", prefix = "", user = "", password = "";
         private boolean debug;
+        private boolean optimisticLocking;
 
         void load(ConfigurationSection c) {
             final String name = plugin.getName();
@@ -48,6 +50,7 @@ public final class SQLDatabase {
             if (cUser != null && !cUser.isEmpty()) this.user = cUser;
             if (cPassword != null && !cPassword.isEmpty()) this.password = cPassword;
             if (c.isSet("debug")) this.debug = c.getBoolean("debug");
+            if (c.isSet("optimisticLocking")) this.optimisticLocking = c.getBoolean("optimisticLocking");
         }
 
         String getUrl() {
@@ -169,6 +172,7 @@ public final class SQLDatabase {
                 Class.forName("com.mysql.jdbc.Driver");
                 Config c = getConfig();
                 this.debug = c.isDebug();
+                this.optimisticLocking = c.optimisticLocking;
                 debugLog(c);
                 connection = DriverManager.getConnection(c.getUrl(), c.getUser(), c.getPassword());
             }
