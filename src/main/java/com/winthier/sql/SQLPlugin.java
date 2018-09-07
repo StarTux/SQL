@@ -14,16 +14,9 @@ import org.bukkit.plugin.java.annotation.plugin.author.Author;
 @Author("StarTux")
 @Website("https://cavetale.com")
 public final class SQLPlugin extends JavaPlugin {
-    @Getter private static SQLPlugin instance;
-
     @Override
     public void onEnable() {
+        reloadConfig();
         saveDefaultConfig();
-        instance = this;
-    }
-
-    @Override
-    public void onDisable() {
-        instance = null;
     }
 }

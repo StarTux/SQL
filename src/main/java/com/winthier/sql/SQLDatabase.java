@@ -14,19 +14,50 @@ import java.util.Map;
 import javax.persistence.PersistenceException;
 import lombok.Data;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
-@RequiredArgsConstructor
+@Getter
 public final class SQLDatabase {
-    @Getter private final JavaPlugin plugin;
+    private final JavaPlugin plugin;
     private final Map<Class<?>, SQLTable<?>> tables = new HashMap<>();
     private static final String SQL_CONFIG_FILE = "sql.yml";
-    private String tablePrefix;
-    private boolean debug;
-    @Getter private boolean optimisticLocking;
+    private final boolean debug;
+    private final boolean optimisticLocking;
+    private final Config config;
+    private Connection connection;
+
+    public SQLDatabase(JavaPlugin plugin) {
+        this.plugin = plugin;
+        config = new Config();
+        config.setHost("127.0.0.1");
+        config.setPort("3306");
+        config.setDatabase(plugin.getName());
+        config.setUser("user");
+        config.setPassword("password");
+        Plugin sqlPlugin = Bukkit.getPluginManager().getPlugin("SQL");
+        if (sqlPlugin != null) {
+            config.load(sqlPlugin.getConfig().getConfigurationSection("database"));
+        }
+        config.load(getPluginDatabaseConfig());
+        this.debug = config.isDebug();
+        this.optimisticLocking = config.optimisticLocking;
+        debugLog(config);
+    }
+
+    private SQLDatabase(SQLDatabase other) {
+        this.plugin = other.plugin;
+        this.config = other.config;
+        this.debug = other.debug;
+        this.optimisticLocking = other.optimisticLocking;
+    }
+
+    public SQLDatabase async() {
+        return new SQLDatabase(this);
+    }
 
     @Data
     final class Config {
@@ -61,22 +92,6 @@ public final class SQLDatabase {
         public String toString() {
             return String.format("SQLDatabase.Config(host=%s port=%s database=%s prefix=%s user=%s password=%s)", host, port, database, prefix, user, password);
         }
-    }
-    private Config config;
-    private Connection connection;
-
-    Config getConfig() {
-        if (config == null) {
-            config = new Config();
-            config.setHost("127.0.0.1");
-            config.setPort("3306");
-            config.setDatabase(plugin.getName());
-            config.setUser("user");
-            config.setPassword("password");
-            config.load(SQLPlugin.getInstance().getConfig().getConfigurationSection("database"));
-            config.load(getPluginDatabaseConfig());
-        }
-        return config;
     }
 
     public <E> SQLTable registerTable(Class<E> clazz) {
@@ -176,11 +191,7 @@ public final class SQLDatabase {
         try {
             if (connection == null || !connection.isValid(1)) {
                 Class.forName("com.mysql.jdbc.Driver");
-                Config c = getConfig();
-                this.debug = c.isDebug();
-                this.optimisticLocking = c.optimisticLocking;
-                debugLog(c);
-                connection = DriverManager.getConnection(c.getUrl(), c.getUser(), c.getPassword());
+                connection = DriverManager.getConnection(config.getUrl(), config.getUser(), config.getPassword());
             }
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
