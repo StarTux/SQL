@@ -5,3 +5,4 @@ database:
     password: 'password'
     database: ''
     prefix: ''
+    optimisticLocking: false
