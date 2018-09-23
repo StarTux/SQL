@@ -53,6 +53,7 @@ public final class SQLDatabase {
         this.config = other.config;
         this.debug = other.debug;
         this.optimisticLocking = other.optimisticLocking;
+        for (Class<?> clz: other.tables.keySet()) registerTable(clz);
     }
 
     public SQLDatabase async() {
