@@ -11,6 +11,7 @@ import java.sql.Statement;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import javax.persistence.PersistenceException;
 import lombok.Data;
 import lombok.Getter;
@@ -28,7 +29,9 @@ public final class SQLDatabase {
     private final boolean debug;
     private final boolean optimisticLocking;
     private final Config config;
-    private Connection connection;
+    private Connection cachedConnection;
+
+    // --- Constructors
 
     public SQLDatabase(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -96,6 +99,8 @@ public final class SQLDatabase {
         }
     }
 
+    // --- API: Tables
+
     public <E> SQLTable registerTable(Class<E> clazz) {
         SQLTable<E> table = new SQLTable<>(clazz, this);
         tables.put(clazz, table);
@@ -114,15 +119,30 @@ public final class SQLDatabase {
         return result;
     }
 
+    public boolean createAllTables() {
+        try {
+            for (SQLTable table: tables.values()) {
+                String sql = table.getCreateTableStatement();
+                executeUpdate(sql);
+            }
+        } catch (PersistenceException pe) {
+            pe.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
+    // --- API: Find and update
+
     public <E> SQLTable<E>.Finder find(Class<E> clazz) {
         return getTable(clazz).find();
     }
 
     public <E> E find(Class<E> clazz, int id) {
-        return getTable(clazz).find(id);
+        return getTable(clazz).find(getConnection(), id);
     }
 
-    public int saveIgnore(Object inst) {
+    private int saveIgnore(Connection connection, Object inst) {
         if (inst instanceof Collection) {
             Collection<?> col = (Collection<?>)inst;
             if (col.isEmpty()) return 0;
@@ -130,77 +150,84 @@ public final class SQLDatabase {
             SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
             int result = 0;
             for (Object o: col) {
-                result += table.saveIgnore(o);
+                result += table.saveIgnore(connection, o);
             }
             return result;
         } else {
             @SuppressWarnings("unchecked")
             SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-            return table.saveIgnore(inst);
+            return table.saveIgnore(connection, inst);
+        }
+    }
+
+    public int saveIgnore(Object inst) {
+        return saveIgnore(getConnection(), inst);
+    }
+
+    public void saveIgnoreAsync(Object inst, Consumer<Integer> callback) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                int result = saveIgnore(createNewConnection(), inst);
+                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+            });
+    }
+
+    private int save(Connection connection, Object inst) {
+        if (inst instanceof Collection) {
+            Collection<?> col = (Collection<?>)inst;
+            if (col.isEmpty()) return 0;
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
+            int result = 0;
+            for (Object o: col) {
+                result += table.save(connection, o);
+            }
+            return result;
+        } else {
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
+            return table.save(connection, inst);
         }
     }
 
     public int save(Object inst) {
-        if (inst instanceof Collection) {
-            Collection<?> col = (Collection<?>)inst;
-            if (col.isEmpty()) return 0;
-            @SuppressWarnings("unchecked")
-            SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
-            int result = 0;
-            for (Object o: col) {
-                result += table.save(o);
-            }
-            return result;
-        } else {
-            @SuppressWarnings("unchecked")
-            SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-            return table.save(inst);
-        }
+        return save(getConnection(), inst);
+    }
+
+    public void saveAsync(Object inst, Consumer<Integer> callback) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                int result = save(createNewConnection(), inst);
+                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+            });
     }
 
     public int save(Object inst, String... fields) {
         @SuppressWarnings("unchecked")
         SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-        return table.save(inst, fields);
+        return table.save(getConnection(), inst, fields);
+    }
+
+    public void saveAsync(Object inst, Consumer<Integer> callback, String... fields) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                @SuppressWarnings("unchecked")
+                SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
+                int result = table.save(getConnection(), inst, fields);
+                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+            });
     }
 
     public int delete(Object inst) {
-        if (inst instanceof Collection) {
-            Collection<?> col = (Collection<?>)inst;
-            if (col.isEmpty()) return 0;
-            @SuppressWarnings("unchecked")
-            SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
-            return table.delete(col);
-        } else {
-            @SuppressWarnings("unchecked")
-            SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-            return table.delete(inst);
-        }
+        @SuppressWarnings("unchecked")
+        SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
+        return table.delete(getConnection(), inst);
     }
 
-    public ConfigurationSection getPluginDatabaseConfig() {
-        File file = new File(plugin.getDataFolder(), SQL_CONFIG_FILE);
-        YamlConfiguration pluginConfig = YamlConfiguration.loadConfiguration(file);
-        InputStream inp = plugin.getResource(SQL_CONFIG_FILE);
-        if (inp != null) {
-            YamlConfiguration defaultConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(inp));
-            pluginConfig.setDefaults(defaultConfig);
-        }
-        return pluginConfig;
-    }
-
-    public synchronized Connection getConnection() {
-        try {
-            if (connection == null || !connection.isValid(1)) {
-                Class.forName("com.mysql.jdbc.Driver");
-                connection = DriverManager.getConnection(config.getUrl(), config.getUser(), config.getPassword());
-            }
-        } catch (SQLException sqle) {
-            throw new PersistenceException(sqle);
-        } catch (ClassNotFoundException cnfe) {
-            throw new PersistenceException(cnfe);
-        }
-        return connection;
+    public void deleteAsync(Object inst, Consumer<Integer> callback) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                @SuppressWarnings("unchecked")
+                SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
+                int result = table.delete(createNewConnection(), inst);
+                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+            });
     }
 
     public int executeUpdate(String sql) {
@@ -213,6 +240,19 @@ public final class SQLDatabase {
         }
     }
 
+    public void executeUpdateAsync(String sql, Consumer<Integer> callback) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    Statement statement = createNewConnection().createStatement();
+                    debugLog(sql);
+                    int result = statement.executeUpdate(sql);
+                    if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                } catch (SQLException sqle) {
+                    throw new PersistenceException(sqle);
+                }
+            });
+    }
+
     public ResultSet executeQuery(String sql) {
         try {
             Statement statement = getConnection().createStatement();
@@ -223,17 +263,57 @@ public final class SQLDatabase {
         }
     }
 
-    public boolean createAllTables() {
-        try {
-            for (SQLTable table: tables.values()) {
-                String sql = table.getCreateTableStatement();
-                executeUpdate(sql);
-            }
-        } catch (PersistenceException pe) {
-            pe.printStackTrace();
-            return false;
+    public void executeQueryAsync(String sql, Consumer<ResultSet> callback) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    Statement statement = getConnection().createStatement();
+                    debugLog(sql);
+                    ResultSet result = statement.executeQuery(sql);
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                } catch (SQLException sqle) {
+                    throw new PersistenceException(sqle);
+                }
+            });
+    }
+
+    // --- Utility: Configuration
+
+    ConfigurationSection getPluginDatabaseConfig() {
+        File file = new File(plugin.getDataFolder(), SQL_CONFIG_FILE);
+        YamlConfiguration pluginConfig = YamlConfiguration.loadConfiguration(file);
+        InputStream inp = plugin.getResource(SQL_CONFIG_FILE);
+        if (inp != null) {
+            YamlConfiguration defaultConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(inp));
+            pluginConfig.setDefaults(defaultConfig);
         }
-        return true;
+        return pluginConfig;
+    }
+
+    // --- Utility: Connection
+
+    synchronized Connection getConnection() {
+        try {
+            if (cachedConnection == null || !cachedConnection.isValid(1)) {
+                Class.forName("com.mysql.jdbc.Driver");
+                cachedConnection = DriverManager.getConnection(config.getUrl(), config.getUser(), config.getPassword());
+            }
+        } catch (SQLException sqle) {
+            throw new PersistenceException(sqle);
+        } catch (ClassNotFoundException cnfe) {
+            throw new PersistenceException(cnfe);
+        }
+        return cachedConnection;
+    }
+
+    synchronized Connection createNewConnection() {
+        try {
+            Class.forName("com.mysql.jdbc.Driver");
+            return DriverManager.getConnection(config.getUrl(), config.getUser(), config.getPassword());
+        } catch (SQLException sqle) {
+            throw new PersistenceException(sqle);
+        } catch (ClassNotFoundException cnfe) {
+            throw new PersistenceException(cnfe);
+        }
     }
 
     void debugLog(Object o) {

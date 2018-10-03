@@ -2,6 +2,7 @@ package com.winthier.sql;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -12,6 +13,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import javax.persistence.Index;
 import javax.persistence.OneToMany;
 import javax.persistence.OptimisticLockException;
@@ -20,6 +22,7 @@ import javax.persistence.Table;
 import javax.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Value;
+import org.bukkit.Bukkit;
 
 @Getter
 public final class SQLTable<E> {
@@ -131,7 +134,7 @@ public final class SQLTable<E> {
         return null;
     }
 
-    public String getCreateTableStatement() {
+    String getCreateTableStatement() {
         StringBuilder sb = new StringBuilder();
         sb.append("CREATE TABLE IF NOT EXISTS `").append(getTableName()).append("` (\n  ");
         sb.append(getColumns().get(0).getCreateTableFragment());
@@ -157,8 +160,8 @@ public final class SQLTable<E> {
         return sb.toString();
     }
 
-    public int getRowCount() {
-        try (Statement statement = database.getConnection().createStatement()) {
+    int getRowCount(Connection connection) {
+        try (Statement statement = connection.createStatement()) {
             String sql = "SELECT COUNT(*) `count` FROM `" + getTableName() + "`";
             database.debugLog(sql);
             ResultSet result = statement.executeQuery(sql);
@@ -169,11 +172,11 @@ public final class SQLTable<E> {
         }
     }
 
-    public E createInstance(ResultSet result) {
+    E createInstance(Connection connection, ResultSet result) {
         try {
             E row = clazz.newInstance();
             for (SQLColumn column: getColumns()) {
-                column.load(row, result);
+                column.load(connection, row, result);
             }
             if (row instanceof SQLInterface) {
                 ((SQLInterface)row).onLoad(result);
@@ -186,19 +189,19 @@ public final class SQLTable<E> {
         }
     }
 
-    public int saveIgnore(E inst) {
-        return save(inst, true, null);
+    int saveIgnore(Connection connection, E inst) {
+        return save(connection, inst, true, null);
     }
 
-    public int save(E inst) {
-        return save(inst, false, null);
+    int save(Connection connection, E inst) {
+        return save(connection, inst, false, null);
     }
 
-    public int save(E inst, String... fields) {
-        return save(inst, false, Arrays.asList(fields));
+    int save(Connection connection, E inst, String... fields) {
+        return save(connection, inst, false, Arrays.asList(fields));
     }
 
-    private int save(E inst, boolean doIgnore, List<String> fields) {
+    private int save(Connection connection, E inst, boolean doIgnore, List<String> fields) {
         StringBuilder sb = new StringBuilder();
         final String idCheck, versionCheck;
         Integer idValue = idColumn == null ? null : (Integer)idColumn.getValue(inst);
@@ -242,7 +245,7 @@ public final class SQLTable<E> {
             sb.append(versionCheck);
             values.add(versionValue);
         }
-        try (PreparedStatement statement = database.getConnection().prepareStatement(sb.toString(), Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement statement = connection.prepareStatement(sb.toString(), Statement.RETURN_GENERATED_KEYS)) {
             SQLUtil.formatStatement(statement, values);
             database.debugLog(statement);
             int ret = statement.executeUpdate();
@@ -262,7 +265,7 @@ public final class SQLTable<E> {
         }
     }
 
-    public int delete(Object inst) {
+    int delete(Connection connection, Object inst) {
         if (inst instanceof Collection) {
             Collection<?> col = (Collection<?>)inst;
             if (col.isEmpty()) return -1;
@@ -273,24 +276,36 @@ public final class SQLTable<E> {
             while (iter.hasNext()) {
                 sb.append(", ").append((Integer)idColumn.getValue(iter.next()));
             }
-            return database.executeUpdate("DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " IN (" + sb.toString() + ")");
+            try (Statement statement = connection.createStatement()) {
+                String sql = "DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " IN (" + sb.toString() + ")";
+                database.debugLog(sql);
+                return statement.executeUpdate(sql);
+            } catch (SQLException sqle) {
+                throw new PersistenceException(sqle);
+            }
         } else {
             if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
             Integer id = (Integer)idColumn.getValue(inst);
             if (id == null) throw new PersistenceException("Id not set: " + inst);
-            return database.executeUpdate("DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id);
+            try (Statement statement = connection.createStatement()) {
+                String sql = "DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id;
+                database.debugLog(sql);
+                return statement.executeUpdate(sql);
+            } catch (SQLException sqle) {
+                throw new PersistenceException(sqle);
+            }
         }
     }
 
-    public E find(int id) {
+    E find(Connection connection, int id) {
         if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
-        try (Statement statement = database.getConnection().createStatement()) {
+        try (Statement statement = connection.createStatement()) {
             String sql = "SELECT * FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id;
             database.debugLog(sql);
             ResultSet result = statement.executeQuery(sql);
             E row;
             if (result.next()) {
-                row = createInstance(result);
+                row = createInstance(connection, result);
             } else {
                 row = null;
             }
@@ -301,7 +316,7 @@ public final class SQLTable<E> {
         }
     }
 
-    public Finder find() {
+    Finder find() {
         return new Finder();
     }
 
@@ -467,13 +482,15 @@ public final class SQLTable<E> {
             return this;
         }
 
-        public E findUnique() {
+        // --- Finder result methods
+
+        private E findUnique(Connection connection) {
             limit(1);
-            try (PreparedStatement statement = getSelectStatement()) {
+            try (PreparedStatement statement = getSelectStatement(connection)) {
                 database.debugLog(statement);
                 ResultSet result = statement.executeQuery();
                 if (result.next()) {
-                    return createInstance(result);
+                    return createInstance(connection, result);
                 } else {
                     return null;
                 }
@@ -482,13 +499,26 @@ public final class SQLTable<E> {
             }
         }
 
-        public List<E> findList() {
+        public E findUnique() {
+            return findUnique(database.getConnection());
+        }
+
+        public void findUniqueAsync(Consumer<E> callback) {
+            Bukkit.getScheduler().runTaskAsynchronously(database.getPlugin(), () -> {
+                    E result = findUnique(database.createNewConnection());
+                    if (callback != null) {
+                        Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
+                    }
+                });
+        }
+
+        private List<E> findList(Connection connection) {
             List<E> list = new ArrayList<>();
-            try (PreparedStatement statement = getSelectStatement()) {
+            try (PreparedStatement statement = getSelectStatement(connection)) {
                 database.debugLog(statement);
                 ResultSet result = statement.executeQuery();
                 while (result.next()) {
-                    list.add(createInstance(result));
+                    list.add(createInstance(connection, result));
                 }
             } catch (SQLException sqle) {
                 throw new PersistenceException(sqle);
@@ -496,8 +526,19 @@ public final class SQLTable<E> {
             return list;
         }
 
-        public int delete() {
-            try (PreparedStatement statement = getDeleteStatement()) {
+        public List<E> findList() {
+            return findList(database.getConnection());
+        }
+
+        public void findListAsync(Consumer<List<E>> callback) {
+            Bukkit.getScheduler().runTaskAsynchronously(database.getPlugin(), () -> {
+                    List<E> result = findList(database.createNewConnection());
+                    Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
+                });
+        }
+
+        private int delete(Connection connection) {
+            try (PreparedStatement statement = getDeleteStatement(connection)) {
                 database.debugLog(statement);
                 return statement.executeUpdate();
             } catch (SQLException sqle) {
@@ -505,9 +546,20 @@ public final class SQLTable<E> {
             }
         }
 
-        public int findRowCount() {
+        public int delete() {
+            return delete(database.getConnection());
+        }
+
+        public void deleteAsync(Consumer<Integer> callback) {
+            Bukkit.getScheduler().runTaskAsynchronously(database.getPlugin(), () -> {
+                    int result = delete(database.createNewConnection());
+                    if (callback != null) Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
+                });
+        }
+
+        private int findRowCount(Connection connection) {
             List<E> list = new ArrayList<>();
-            try (PreparedStatement statement = getRowCountStatement()) {
+            try (PreparedStatement statement = getRowCountStatement(connection)) {
                 database.debugLog(statement);
                 ResultSet result = statement.executeQuery();
                 result.next();
@@ -517,7 +569,20 @@ public final class SQLTable<E> {
             }
         }
 
-        PreparedStatement getSelectStatement() throws SQLException {
+        public int findRowCount() {
+            return findRowCount(database.getConnection());
+        }
+
+        public void findRowCountAsync(Consumer<Integer> callback) {
+            Bukkit.getScheduler().runTaskAsynchronously(database.getPlugin(), () -> {
+                    int result = findRowCount(database.createNewConnection());
+                    Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
+                });
+        }
+
+        // --- Finder: create statements
+
+        PreparedStatement getSelectStatement(Connection connection) throws SQLException {
             if (!order.isEmpty()) {
                 sb.append(" ORDER BY ").append(order.get(0));
                 for (int i = 1; i < order.size(); ++i) {
@@ -529,21 +594,21 @@ public final class SQLTable<E> {
                 if (offset > -1) sb.append(" OFFSET " + offset);
             }
             String sql = "SELECT * FROM `" + getTableName() + "`" + sb.toString();
-            PreparedStatement statement = database.getConnection().prepareStatement(sql);
+            PreparedStatement statement = connection.prepareStatement(sql);
             SQLUtil.formatStatement(statement, values);
             return statement;
         }
 
-        PreparedStatement getDeleteStatement() throws SQLException {
+        PreparedStatement getDeleteStatement(Connection connection) throws SQLException {
             String sql = "DELETE FROM `" + getTableName() + "`" + sb.toString();
-            PreparedStatement statement = database.getConnection().prepareStatement(sql);
+            PreparedStatement statement = connection.prepareStatement(sql);
             SQLUtil.formatStatement(statement, values);
             return statement;
         }
 
-        PreparedStatement getRowCountStatement() throws SQLException {
+        PreparedStatement getRowCountStatement(Connection connection) throws SQLException {
             String sql = "SELECT count(*) row_count FROM `" + getTableName() + "`" + sb.toString();
-            PreparedStatement statement = database.getConnection().prepareStatement(sql);
+            PreparedStatement statement = connection.prepareStatement(sql);
             SQLUtil.formatStatement(statement, values);
             return statement;
         }

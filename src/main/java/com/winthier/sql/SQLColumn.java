@@ -4,6 +4,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -121,7 +122,7 @@ final class SQLColumn {
         return "`" + getColumnName() + "` " + getColumnDefinition();
     }
 
-    void load(Object inst, ResultSet result) {
+    void load(Connection connection, Object inst, ResultSet result) {
         try {
             Object value;
             switch (type) {
@@ -161,7 +162,7 @@ final class SQLColumn {
                     if (refTable == null) {
                         throw new EntityNotFoundException("Table not registered: " + field.getType());
                     }
-                    value = refTable.find(num);
+                    value = refTable.find(connection, num);
                 }
                 break;
             default:
