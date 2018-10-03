@@ -291,7 +291,7 @@ public final class SQLDatabase {
 
     // --- Utility: Connection
 
-    synchronized Connection getConnection() {
+    public synchronized Connection getConnection() {
         try {
             if (cachedConnection == null || !cachedConnection.isValid(1)) {
                 Class.forName("com.mysql.jdbc.Driver");
@@ -305,7 +305,7 @@ public final class SQLDatabase {
         return cachedConnection;
     }
 
-    synchronized Connection createNewConnection() {
+    public synchronized Connection createNewConnection() {
         try {
             Class.forName("com.mysql.jdbc.Driver");
             return DriverManager.getConnection(config.getUrl(), config.getUser(), config.getPassword());
