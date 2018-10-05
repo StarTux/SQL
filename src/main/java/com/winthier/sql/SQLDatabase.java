@@ -166,7 +166,13 @@ public final class SQLDatabase {
 
     public void saveIgnoreAsync(Object inst, Consumer<Integer> callback) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                int result = saveIgnore(createNewConnection(), inst);
+                Connection connection = createNewConnection();
+                int result = saveIgnore(connection, inst);
+                try {
+                    connection.close();
+                } catch (SQLException sqle) {
+                    sqle.printStackTrace();
+                }
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
@@ -195,7 +201,13 @@ public final class SQLDatabase {
 
     public void saveAsync(Object inst, Consumer<Integer> callback) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                int result = save(createNewConnection(), inst);
+                Connection connection = createNewConnection();
+                int result = save(connection, inst);
+                try {
+                    connection.close();
+                } catch (SQLException sqle) {
+                    sqle.printStackTrace();
+                }
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
@@ -225,7 +237,13 @@ public final class SQLDatabase {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 @SuppressWarnings("unchecked")
                 SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-                int result = table.delete(createNewConnection(), inst);
+                Connection connection = createNewConnection();
+                int result = table.delete(connection, inst);
+                try {
+                    connection.close();
+                } catch (SQLException sqle) {
+                    sqle.printStackTrace();
+                }
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
