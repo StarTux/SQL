@@ -11,6 +11,8 @@ import java.sql.Statement;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import javax.persistence.PersistenceException;
 import lombok.Data;
@@ -20,6 +22,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 @Getter
 public final class SQLDatabase {
@@ -30,6 +33,9 @@ public final class SQLDatabase {
     private final boolean optimisticLocking;
     private final Config config;
     private Connection cachedConnection;
+    private Connection asyncConnection;
+    private LinkedBlockingQueue<Runnable> asyncTasks;
+    private BukkitTask asyncWorker = null;
 
     // --- Constructors
 
@@ -64,6 +70,8 @@ public final class SQLDatabase {
         return cpy;
     }
 
+    // --- Utility: Configuration
+
     @Data
     final class Config {
         private String host = "", port = "", database = "", prefix = "", user = "", password = "";
@@ -97,6 +105,17 @@ public final class SQLDatabase {
         public String toString() {
             return String.format("SQLDatabase.Config(host=%s port=%s database=%s prefix=%s user=%s password=%s)", host, port, database, prefix, user, password);
         }
+    }
+
+    ConfigurationSection getPluginDatabaseConfig() {
+        File file = new File(plugin.getDataFolder(), SQL_CONFIG_FILE);
+        YamlConfiguration pluginConfig = YamlConfiguration.loadConfiguration(file);
+        InputStream inp = plugin.getResource(SQL_CONFIG_FILE);
+        if (inp != null) {
+            YamlConfiguration defaultConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(inp));
+            pluginConfig.setDefaults(defaultConfig);
+        }
+        return pluginConfig;
     }
 
     // --- API: Tables
@@ -165,14 +184,8 @@ public final class SQLDatabase {
     }
 
     public void saveIgnoreAsync(Object inst, Consumer<Integer> callback) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                Connection connection = createNewConnection();
-                int result = saveIgnore(connection, inst);
-                try {
-                    connection.close();
-                } catch (SQLException sqle) {
-                    sqle.printStackTrace();
-                }
+        scheduleAsyncTask(() -> {
+                int result = saveIgnore(getAsyncConnection(), inst);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
@@ -200,14 +213,8 @@ public final class SQLDatabase {
     }
 
     public void saveAsync(Object inst, Consumer<Integer> callback) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                Connection connection = createNewConnection();
-                int result = save(connection, inst);
-                try {
-                    connection.close();
-                } catch (SQLException sqle) {
-                    sqle.printStackTrace();
-                }
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), inst);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
@@ -219,10 +226,10 @@ public final class SQLDatabase {
     }
 
     public void saveAsync(Object inst, Consumer<Integer> callback, String... fields) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        scheduleAsyncTask(() -> {
                 @SuppressWarnings("unchecked")
                 SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-                int result = table.save(getConnection(), inst, fields);
+                int result = table.save(getAsyncConnection(), inst, fields);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
@@ -234,16 +241,10 @@ public final class SQLDatabase {
     }
 
     public void deleteAsync(Object inst, Consumer<Integer> callback) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        scheduleAsyncTask(() -> {
                 @SuppressWarnings("unchecked")
                 SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-                Connection connection = createNewConnection();
-                int result = table.delete(connection, inst);
-                try {
-                    connection.close();
-                } catch (SQLException sqle) {
-                    sqle.printStackTrace();
-                }
+                int result = table.delete(getAsyncConnection(), inst);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
@@ -259,9 +260,9 @@ public final class SQLDatabase {
     }
 
     public void executeUpdateAsync(String sql, Consumer<Integer> callback) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        scheduleAsyncTask(() -> {
                 try {
-                    Statement statement = createNewConnection().createStatement();
+                    Statement statement = getAsyncConnection().createStatement();
                     debugLog(sql);
                     int result = statement.executeUpdate(sql);
                     if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
@@ -282,9 +283,9 @@ public final class SQLDatabase {
     }
 
     public void executeQueryAsync(String sql, Consumer<ResultSet> callback) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        scheduleAsyncTask(() -> {
                 try {
-                    Statement statement = getConnection().createStatement();
+                    Statement statement = getAsyncConnection().createStatement();
                     debugLog(sql);
                     ResultSet result = statement.executeQuery(sql);
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
@@ -294,22 +295,9 @@ public final class SQLDatabase {
             });
     }
 
-    // --- Utility: Configuration
-
-    ConfigurationSection getPluginDatabaseConfig() {
-        File file = new File(plugin.getDataFolder(), SQL_CONFIG_FILE);
-        YamlConfiguration pluginConfig = YamlConfiguration.loadConfiguration(file);
-        InputStream inp = plugin.getResource(SQL_CONFIG_FILE);
-        if (inp != null) {
-            YamlConfiguration defaultConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(inp));
-            pluginConfig.setDefaults(defaultConfig);
-        }
-        return pluginConfig;
-    }
-
     // --- Utility: Connection
 
-    public synchronized Connection getConnection() {
+    public Connection getConnection() {
         try {
             if (cachedConnection == null || !cachedConnection.isValid(1)) {
                 Class.forName("com.mysql.jdbc.Driver");
@@ -323,19 +311,43 @@ public final class SQLDatabase {
         return cachedConnection;
     }
 
-    public synchronized Connection createNewConnection() {
+    public Connection getAsyncConnection() {
         try {
-            Class.forName("com.mysql.jdbc.Driver");
-            return DriverManager.getConnection(config.getUrl(), config.getUser(), config.getPassword());
+            if (asyncConnection == null || !asyncConnection.isValid(1)) {
+                Class.forName("com.mysql.jdbc.Driver");
+                asyncConnection = DriverManager.getConnection(config.getUrl(), config.getUser(), config.getPassword());
+            }
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
         } catch (ClassNotFoundException cnfe) {
             throw new PersistenceException(cnfe);
         }
+        return asyncConnection;
     }
 
     void debugLog(Object o) {
         if (!debug) return;
         plugin.getLogger().info("[SQL] " + o);
+    }
+
+    // --- Utility: Async
+
+    void scheduleAsyncTask(Runnable task) {
+        if (asyncWorker == null) {
+            asyncTasks = new LinkedBlockingQueue<>();
+            asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);
+        }
+        asyncTasks.add(task);
+    }
+
+    private void asyncWorkerTask() {
+        while (plugin.isEnabled()) {
+            try {
+                Runnable run = asyncTasks.poll(1, TimeUnit.SECONDS);
+                if (run != null) run.run();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 }

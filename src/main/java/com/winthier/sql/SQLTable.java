@@ -504,14 +504,8 @@ public final class SQLTable<E> {
         }
 
         public void findUniqueAsync(Consumer<E> callback) {
-            Bukkit.getScheduler().runTaskAsynchronously(database.getPlugin(), () -> {
-                    Connection connection = database.createNewConnection();
-                    E result = findUnique(connection);
-                    try {
-                        connection.close();
-                    } catch (SQLException sqle) {
-                        sqle.printStackTrace();
-                    }
+            database.scheduleAsyncTask(() -> {
+                    E result = findUnique(database.getAsyncConnection());
                     if (callback != null) Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
@@ -535,14 +529,8 @@ public final class SQLTable<E> {
         }
 
         public void findListAsync(Consumer<List<E>> callback) {
-            Bukkit.getScheduler().runTaskAsynchronously(database.getPlugin(), () -> {
-                    Connection connection = database.createNewConnection();
-                    List<E> result = findList(connection);
-                    try {
-                        connection.close();
-                    } catch (SQLException sqle) {
-                        sqle.printStackTrace();
-                    }
+            database.scheduleAsyncTask(() -> {
+                    List<E> result = findList(database.getAsyncConnection());
                     Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
@@ -561,14 +549,8 @@ public final class SQLTable<E> {
         }
 
         public void deleteAsync(Consumer<Integer> callback) {
-            Bukkit.getScheduler().runTaskAsynchronously(database.getPlugin(), () -> {
-                    Connection connection = database.createNewConnection();
-                    int result = delete(connection);
-                    try {
-                        connection.close();
-                    } catch (SQLException sqle) {
-                        sqle.printStackTrace();
-                    }
+            database.scheduleAsyncTask(() -> {
+                    int result = delete(database.getAsyncConnection());
                     if (callback != null) Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
@@ -590,14 +572,8 @@ public final class SQLTable<E> {
         }
 
         public void findRowCountAsync(Consumer<Integer> callback) {
-            Bukkit.getScheduler().runTaskAsynchronously(database.getPlugin(), () -> {
-                    Connection connection = database.createNewConnection();
-                    int result = findRowCount(connection);
-                    try {
-                        connection.close();
-                    } catch (SQLException sqle) {
-                        sqle.printStackTrace();
-                    }
+            database.scheduleAsyncTask(() -> {
+                    int result = findRowCount(database.getAsyncConnection());
                     Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
