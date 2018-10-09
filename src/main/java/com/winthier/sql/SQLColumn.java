@@ -16,6 +16,7 @@ import javax.persistence.Id;
 import javax.persistence.PersistenceException;
 import javax.persistence.Version;
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 final class SQLColumn {
@@ -28,7 +29,7 @@ final class SQLColumn {
     private final int precision;
     private final SQLType type;
     private final boolean id;
-    private final boolean unique;
+    @Setter private boolean unique;
     private final boolean version;
     private Method getterMethod;
     private Method setterMethod;
@@ -50,7 +51,7 @@ final class SQLColumn {
             this.nullable = !id && !version;
             this.length = 255;
             this.precision = 11;
-            this.unique = false;
+            this.unique = this.id;
         }
         type = SQLType.of(field);
         if (columnName == null || columnName.isEmpty()) {
@@ -178,12 +179,23 @@ final class SQLColumn {
         }
     }
 
-    void createSaveFragment(Object inst, List<String> fragments, List<Object> values) {
+    /**
+     * Create a VALUE assignment for
+     * ```
+     * INSERT INTO `tblName` (columnNames) VALUES (...), (...)
+     * ```
+     * kind of statements.  The statement will be compiled later, with
+     * question mark placeholders.
+     * @param inst The column Object instance
+     * @param fragments The list of Strings to add to, with placeholder
+     * @param values The list of object values.
+     */
+    void createSaveFragment(Object inst, StringBuilder sb, List<Object> values) {
         Object value = getValue(inst);
         if (value == null) {
-            fragments.add("`" + getColumnName() + "`=NULL");
+            sb.append("NULL");
         } else {
-            fragments.add("`" + getColumnName() + "`=?");
+            sb.append("?");
             if (type == SQLType.REFERENCE) {
                 SQLTable refTable = table.getDatabase().getTable(field.getType());
                 if (refTable == null) {

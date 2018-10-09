@@ -11,12 +11,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import javax.persistence.Index;
 import javax.persistence.OneToMany;
-import javax.persistence.OptimisticLockException;
 import javax.persistence.PersistenceException;
 import javax.persistence.Table;
 import javax.persistence.UniqueConstraint;
@@ -29,10 +30,10 @@ public final class SQLTable<E> {
     private final Class<E> clazz;
     private final SQLDatabase database;
     private String tableName;
-    private List<SQLColumn> columns;
     private SQLColumn idColumn;
     private SQLColumn versionColumn;
-    private List<Key> keys;
+    private final List<Key> keys = new ArrayList<>();
+    private final List<SQLColumn> columns = new ArrayList<>();
 
     @Value
     static class Key {
@@ -56,78 +57,60 @@ public final class SQLTable<E> {
         if (tableName == null || tableName.isEmpty()) {
             tableName = tablePrefix + SQLUtil.camelToLowerCase(clazz.getSimpleName());
         }
-    }
-
-    List<SQLColumn> getColumns() {
-        if (columns == null) {
-            columns = new ArrayList<>();
-            for (Field field: clazz.getDeclaredFields()) {
-                if (Modifier.isTransient(field.getModifiers())
-                    || Modifier.isStatic(field.getModifiers())
-                    || Modifier.isFinal(field.getModifiers())
-                    || field.getAnnotation(OneToMany.class) != null
-                    || Collection.class.isAssignableFrom(field.getType())
-                    || Map.class.isAssignableFrom(field.getType())) continue;
-                SQLColumn column = new SQLColumn(this, field);
-                columns.add(column);
-                if (column.isId()) idColumn = column;
-                if (column.isVersion()) versionColumn = column;
-            }
+        // Columns
+        for (Field field: clazz.getDeclaredFields()) {
+            if (Modifier.isTransient(field.getModifiers())
+                || Modifier.isStatic(field.getModifiers())
+                || Modifier.isFinal(field.getModifiers())
+                || field.getAnnotation(OneToMany.class) != null
+                || Collection.class.isAssignableFrom(field.getType())
+                || Map.class.isAssignableFrom(field.getType())) continue;
+            SQLColumn column = new SQLColumn(this, field);
+            columns.add(column);
+            if (column.isId()) idColumn = column;
+            if (column.isVersion()) versionColumn = column;
         }
-        return columns;
-    }
-
-    List<Key> getKeys() {
-        if (keys == null) {
-            keys = new ArrayList<>();
-            Table tableAnnotation = clazz.getAnnotation(Table.class);
-            if (tableAnnotation != null) {
-                UniqueConstraint[] constraints = tableAnnotation.uniqueConstraints();
-                if (constraints != null) {
-                    int counter = 0;
-                    for (UniqueConstraint constraint: constraints) {
-                        counter += 1;
-                        String name = "uq_" + getTableName() + "_" + counter;
-                        List<SQLColumn> constraintColumns = new ArrayList<>();
-                        for (String columnName: constraint.columnNames()) {
-                            SQLColumn column = getColumn(columnName);
-                            if (column == null) {
-                                throw new IllegalArgumentException(clazz.getName() + ": Column for unique constraint not found: " + columnName);
-                            } else {
-                                constraintColumns.add(column);
-                            }
-                        }
-                        keys.add(new Key(true, name, constraintColumns));
+        // Keys
+        if (tableAnnotation != null) {
+            // Unique constraints
+            UniqueConstraint[] constraints = tableAnnotation.uniqueConstraints();
+            if (constraints != null) {
+                int counter = 0;
+                for (UniqueConstraint constraint: constraints) {
+                    counter += 1;
+                    String name = "uq_" + getTableName() + "_" + counter;
+                    List<SQLColumn> constraintColumns = new ArrayList<>();
+                    for (String columnName: constraint.columnNames()) {
+                        SQLColumn column = getColumn(columnName);
+                        if (column == null) throw new IllegalArgumentException(clazz.getName() + ": Column for unique constraint not found: " + columnName);
+                        constraintColumns.add(column);
+                        column.setUnique(true);
                     }
-                }
-                Index[] indexes = tableAnnotation.indexes();
-                if (indexes != null) {
-                    int counter = 0;
-                    for (Index index: indexes) {
-                        counter += 1;
-                        String name = "key_" + getTableName() + "_" + counter;
-                        List<SQLColumn> indexColumns = new ArrayList<>();
-                        for (String columnName: index.columnList().split(", ?")) {
-                            SQLColumn column = getColumn(columnName);
-                            if (column == null) {
-                                throw new IllegalArgumentException(clazz.getName() + ": Column for index not found: " + columnName);
-                            } else {
-                                indexColumns.add(column);
-                            }
-                        }
-                        keys.add(new Key(index.unique(), name, indexColumns));
-                    }
+                    keys.add(new Key(true, name, constraintColumns));
                 }
             }
-            for (SQLColumn column: getColumns()) {
-                if (column.isUnique()) keys.add(Key.of(column));
+            // Index annotation
+            Index[] indexes = tableAnnotation.indexes();
+            if (indexes != null) {
+                int counter = 0;
+                for (Index index: indexes) {
+                    counter += 1;
+                    String name = "key_" + getTableName() + "_" + counter;
+                    List<SQLColumn> indexColumns = new ArrayList<>();
+                    for (String columnName: index.columnList().split(", ?")) {
+                        SQLColumn column = getColumn(columnName);
+                        if (column == null) throw new IllegalArgumentException(clazz.getName() + ": Column for index not found: " + columnName);
+                        indexColumns.add(column);
+                        if (index.unique()) column.setUnique(true);
+                    }
+                    keys.add(new Key(index.unique(), name, indexColumns));
+                }
             }
         }
-        return keys;
     }
 
     SQLColumn getColumn(String label) {
-        for (SQLColumn column: getColumns()) {
+        for (SQLColumn column: columns) {
             if (column.getColumnName().equals(label)) return column;
             if (column.getField().getName().equals(label)) return column;
         }
@@ -137,13 +120,13 @@ public final class SQLTable<E> {
     String getCreateTableStatement() {
         StringBuilder sb = new StringBuilder();
         sb.append("CREATE TABLE IF NOT EXISTS `").append(getTableName()).append("` (\n  ");
-        sb.append(getColumns().get(0).getCreateTableFragment());
-        for (int i = 1; i < getColumns().size(); ++i) {
+        sb.append(columns.get(0).getCreateTableFragment());
+        for (int i = 1; i < columns.size(); ++i) {
             sb.append(",\n  ");
-            sb.append(getColumns().get(i).getCreateTableFragment());
+            sb.append(columns.get(i).getCreateTableFragment());
         }
         if (idColumn != null) sb.append(",\n  PRIMARY KEY (`").append(idColumn.getColumnName()).append("`)");
-        for (Key key: getKeys()) {
+        for (Key key: keys) {
             if (key.isUnique()) {
                 sb.append(",\n  UNIQUE KEY `").append(key.getName()).append("` (`");
             } else {
@@ -175,7 +158,7 @@ public final class SQLTable<E> {
     E createInstance(Connection connection, ResultSet result) {
         try {
             E row = clazz.newInstance();
-            for (SQLColumn column: getColumns()) {
+            for (SQLColumn column: columns) {
                 column.load(connection, row, result);
             }
             if (row instanceof SQLInterface) {
@@ -189,73 +172,99 @@ public final class SQLTable<E> {
         }
     }
 
-    int saveIgnore(Connection connection, E inst) {
-        return save(connection, inst, true, null);
-    }
-
-    int save(Connection connection, E inst) {
-        return save(connection, inst, false, null);
-    }
-
-    int save(Connection connection, E inst, String... fields) {
-        return save(connection, inst, false, Arrays.asList(fields));
-    }
-
-    private int save(Connection connection, E inst, boolean doIgnore, List<String> fields) {
+    int save(Connection connection, Collection<E> instances, boolean doIgnore, Set<String> columnNames) {
+        if (instances.isEmpty()) throw new PersistenceException("Instances cannot be empty");
+        // Collect all columns used in the statement
+        Set<SQLColumn> columnSet = new LinkedHashSet<>(columns.size());
+        if (columnNames == null || columnNames.isEmpty()) {
+            // If no column names are specified, add all columns
+            columnSet.addAll(columns);
+        } else {
+            // Always add the ID and UNIQUE KEYS
+            if (idColumn != null) columnSet.add(idColumn);
+            for (Key key: keys) {
+                if (key.unique) {
+                    for (SQLColumn uqColumn: key.columns) columnSet.add(uqColumn);
+                }
+            }
+            // Add the version if one exists
+            if (versionColumn != null) {
+                columnSet.add(versionColumn);
+            }
+            for (SQLColumn column: columns) {
+                if (!column.isNullable()) {
+                    columnSet.add(column);
+                }
+            }
+            for (String columnName: columnNames) {
+                SQLColumn column = getColumn(columnName);
+                if (column == null) throw new PersistenceException("Field not found: " + tableName + "." + columnName);
+                columnSet.add(column);
+            }
+        }
+        Set<SQLColumn> nonUniqueColumns = new LinkedHashSet<>(columns.size());
+        for (SQLColumn column: columnSet) {
+            if (!column.isUnique()) nonUniqueColumns.add(column);
+        }
+        // Build the statement
         StringBuilder sb = new StringBuilder();
-        final String idCheck, versionCheck;
-        Integer idValue = idColumn == null ? null : (Integer)idColumn.getValue(inst);
-        List<Object> values = new ArrayList<>();
-        if (idValue == null) {
-            if (doIgnore) {
-                sb.append("INSERT IGNORE INTO `" + getTableName() + "` SET ");
-            } else {
-                sb.append("INSERT INTO `" + getTableName() + "` SET ");
-            }
-            idCheck = null;
+        // Insert statement
+        if (doIgnore) {
+            sb.append("INSERT IGNORE INTO `" + getTableName() + "`");
         } else {
-            sb.append("UPDATE `" + getTableName() + "` SET ");
-            idCheck = " WHERE `" + idColumn.getColumnName() + "` = " + idValue;
+            sb.append("INSERT INTO `" + getTableName() + "`");
         }
-        Object versionValue = versionColumn == null ? null : versionColumn.getValue(inst);
-        if (database.isOptimisticLocking() && versionValue != null) {
-            versionCheck = " AND `" + versionColumn.getColumnName() + "` = ?";
-        } else {
-            versionCheck = null;
+        // Write the column names
+        if (columnSet.isEmpty()) throw new PersistenceException("Empty save statement: " + tableName);
+        sb.append("\n(`");
+        Iterator<SQLColumn> columnIter = columnSet.iterator();
+        sb.append(columnIter.next().getColumnName());
+        while (columnIter.hasNext()) {
+            sb.append("`, `").append(columnIter.next().getColumnName());
         }
-        if (versionColumn != null) versionColumn.updateVersionValue(inst);
-        List<String> fragments = new ArrayList<>();
-        if (fields != null) {
-            for (String field: fields) {
-                if (getColumn(field) == null) throw new PersistenceException("Field not found: " + tableName + "." + field);
+        sb.append("`)\nVALUES");
+        List<Object> values = new ArrayList<>(instances.size() * columnSet.size());
+        boolean first = true;
+        for (Object inst: instances) {
+            if (versionColumn != null) versionColumn.updateVersionValue(inst);
+            if (!first) sb.append(",");
+            first = false;
+            sb.append("\n(");
+            columnIter = columnSet.iterator();
+            columnIter.next().createSaveFragment(inst, sb, values);
+            while (columnIter.hasNext()) {
+                sb.append(", ");
+                columnIter.next().createSaveFragment(inst, sb, values);
+            }
+            sb.append(")");
+        }
+        // In the presence of any non-unique columns, write the ON
+        // DUPLICATE UPDATE statement.
+        if (!nonUniqueColumns.isEmpty()) {
+            sb.append("\nON DUPLICATE KEY UPDATE");
+            columnIter = nonUniqueColumns.iterator();
+            SQLColumn column = columnIter.next();
+            sb.append("\n`").append(column.getColumnName()).append("`=VALUES(").append(column.getColumnName()).append(")");
+            while (columnIter.hasNext()) {
+                column = columnIter.next();
+                sb.append(",\n`").append(column.getColumnName()).append("`=VALUES(`").append(column.getColumnName()).append("`)");
             }
         }
-        for (SQLColumn column: getColumns()) {
-            if (column.isId()) continue;
-            if (column.isVersion() || fields == null || fields.contains(column.getColumnName()) || fields.contains(column.getField().getName())) {
-                column.createSaveFragment(inst, fragments, values);
-            }
-        }
-        sb.append(fragments.get(0));
-        for (int i = 1; i < fragments.size(); ++i) sb.append(", ").append(fragments.get(i));
-        if (idCheck != null) {
-            sb.append(idCheck);
-        }
-        if (versionCheck != null) {
-            sb.append(versionCheck);
-            values.add(versionValue);
-        }
+        // Build the statement
         try (PreparedStatement statement = connection.prepareStatement(sb.toString(), Statement.RETURN_GENERATED_KEYS)) {
             SQLUtil.formatStatement(statement, values);
             database.debugLog(statement);
             int ret = statement.executeUpdate();
-            if (ret != 1) throw new OptimisticLockException("Failed to save row " + getTableName() + ": " + inst + ": " + statement);
-            if (idColumn != null && idValue == null) {
-                ResultSet result = statement.getGeneratedKeys();
-                if (result.next()) {
-                    int newId = result.getInt(1);
-                    if (idColumn != null) {
-                        idColumn.setValue(inst, newId);
+            if (idColumn != null) {
+                ResultSet keySet = statement.getGeneratedKeys();
+                for (Object inst: instances) {
+                    if (idColumn.getValue(inst) == null) {
+                        if (keySet.next()) {
+                            int newId = keySet.getInt(1);
+                            idColumn.setValue(inst, newId);
+                        } else {
+                            throw new PersistenceException("Missing generated ID for instance: " + inst);
+                        }
                     }
                 }
             }

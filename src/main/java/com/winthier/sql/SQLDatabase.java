@@ -8,9 +8,12 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -30,7 +33,6 @@ public final class SQLDatabase {
     private final Map<Class<?>, SQLTable<?>> tables = new HashMap<>();
     private static final String SQL_CONFIG_FILE = "sql.yml";
     private final boolean debug;
-    private final boolean optimisticLocking;
     private final Config config;
     private Connection cachedConnection;
     private Connection asyncConnection;
@@ -53,7 +55,6 @@ public final class SQLDatabase {
         }
         config.load(getPluginDatabaseConfig());
         this.debug = config.isDebug();
-        this.optimisticLocking = config.optimisticLocking;
         debugLog(config);
     }
 
@@ -61,7 +62,6 @@ public final class SQLDatabase {
         this.plugin = other.plugin;
         this.config = other.config;
         this.debug = other.debug;
-        this.optimisticLocking = other.optimisticLocking;
     }
 
     public SQLDatabase async() {
@@ -76,7 +76,6 @@ public final class SQLDatabase {
     final class Config {
         private String host = "", port = "", database = "", prefix = "", user = "", password = "";
         private boolean debug;
-        private boolean optimisticLocking;
 
         void load(ConfigurationSection c) {
             final String name = plugin.getName();
@@ -94,7 +93,6 @@ public final class SQLDatabase {
             if (cUser != null && !cUser.isEmpty()) this.user = cUser;
             if (cPassword != null && !cPassword.isEmpty()) this.password = cPassword;
             if (c.isSet("debug")) this.debug = c.getBoolean("debug");
-            if (c.isSet("optimisticLocking")) this.optimisticLocking = c.getBoolean("optimisticLocking");
         }
 
         String getUrl() {
@@ -161,78 +159,80 @@ public final class SQLDatabase {
         return getTable(clazz).find(getConnection(), id);
     }
 
-    private int saveIgnore(Connection connection, Object inst) {
+    // --- API: Save
+
+    /**
+     * Internal save helper.
+     */
+    private int save(Connection connection, Object inst, boolean doIgnore, Set<String> columnNames) {
         if (inst instanceof Collection) {
-            Collection<?> col = (Collection<?>)inst;
-            if (col.isEmpty()) return 0;
+            Collection<Object> collection = (Collection<Object>)inst;
+            if (collection.isEmpty()) return 0;
+            Object any = collection.iterator().next().getClass();
             @SuppressWarnings("unchecked")
-            SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
-            int result = 0;
-            for (Object o: col) {
-                result += table.saveIgnore(connection, o);
-            }
-            return result;
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(any);
+            if (table == null) throw new PersistenceException("Table not found for object of class " + any.getClass().getName());
+            return table.save(connection, collection, doIgnore, columnNames);
         } else {
             @SuppressWarnings("unchecked")
             SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-            return table.saveIgnore(connection, inst);
+            if (table == null) throw new PersistenceException("Table not found for object of class " + inst.getClass().getName());
+            return table.save(connection, Arrays.asList(inst), doIgnore, columnNames);
         }
     }
 
     public int saveIgnore(Object inst) {
-        return saveIgnore(getConnection(), inst);
+        return save(getConnection(), inst, true, null);
     }
 
     public void saveIgnoreAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = saveIgnore(getAsyncConnection(), inst);
+                int result = save(getAsyncConnection(), inst, true, null);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
 
-    private int save(Connection connection, Object inst) {
-        if (inst instanceof Collection) {
-            Collection<?> col = (Collection<?>)inst;
-            if (col.isEmpty()) return 0;
-            @SuppressWarnings("unchecked")
-            SQLTable<Object> table = (SQLTable<Object>)tables.get(col.iterator().next().getClass());
-            int result = 0;
-            for (Object o: col) {
-                result += table.save(connection, o);
-            }
-            return result;
-        } else {
-            @SuppressWarnings("unchecked")
-            SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-            return table.save(connection, inst);
-        }
-    }
-
     public int save(Object inst) {
-        return save(getConnection(), inst);
+        return save(getConnection(), inst, false, null);
     }
 
     public void saveAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst);
+                int result = save(getAsyncConnection(), inst, false, null);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
 
     public int save(Object inst, String... fields) {
-        @SuppressWarnings("unchecked")
-        SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-        return table.save(getConnection(), inst, fields);
+        return save(getConnection(), inst, false, new LinkedHashSet<>(Arrays.asList(fields)));
     }
 
     public void saveAsync(Object inst, Consumer<Integer> callback, String... fields) {
         scheduleAsyncTask(() -> {
-                @SuppressWarnings("unchecked")
-                SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-                int result = table.save(getAsyncConnection(), inst, fields);
+                int result = save(getAsyncConnection(), inst, false, new LinkedHashSet<>(Arrays.asList(fields)));
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
+
+    public int save(Object inst, Set<String> fields) {
+        return save(getConnection(), inst, false, fields);
+    }
+
+    public void saveAsync(Object inst, Set<String> fields, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = save(getConnection(), inst, false, fields);
+                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+            });
+    }
+
+    public void saveIgnoreAsync(Object inst, Set<String> fields, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = save(getConnection(), inst, true, fields);
+                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+            });
+    }
+
+    // --- API: Delete
 
     public int delete(Object inst) {
         @SuppressWarnings("unchecked")
