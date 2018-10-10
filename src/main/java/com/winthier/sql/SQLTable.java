@@ -274,35 +274,21 @@ public final class SQLTable<E> {
         }
     }
 
-    int delete(Connection connection, Object inst) {
-        if (inst instanceof Collection) {
-            Collection<?> col = (Collection<?>)inst;
-            if (col.isEmpty()) return -1;
-            if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
-            Iterator<?> iter = col.iterator();
-            StringBuilder sb = new StringBuilder();
-            sb.append((Integer)idColumn.getValue(iter.next()));
-            while (iter.hasNext()) {
-                sb.append(", ").append((Integer)idColumn.getValue(iter.next()));
-            }
-            try (Statement statement = connection.createStatement()) {
-                String sql = "DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " IN (" + sb.toString() + ")";
-                database.debugLog(sql);
-                return statement.executeUpdate(sql);
-            } catch (SQLException sqle) {
-                throw new PersistenceException(sqle);
-            }
-        } else {
-            if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
-            Integer id = (Integer)idColumn.getValue(inst);
-            if (id == null) throw new PersistenceException("Id not set: " + inst);
-            try (Statement statement = connection.createStatement()) {
-                String sql = "DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id;
-                database.debugLog(sql);
-                return statement.executeUpdate(sql);
-            } catch (SQLException sqle) {
-                throw new PersistenceException(sqle);
-            }
+    int delete(Connection connection, Collection<Object> collection) {
+        if (collection.isEmpty()) return -1;
+        if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
+        Iterator<?> iter = collection.iterator();
+        StringBuilder sb = new StringBuilder();
+        sb.append((Integer)idColumn.getValue(iter.next()));
+        while (iter.hasNext()) {
+            sb.append(", ").append((Integer)idColumn.getValue(iter.next()));
+        }
+        try (Statement statement = connection.createStatement()) {
+            String sql = "DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " IN (" + sb.toString() + ")";
+            database.debugLog(sql);
+            return statement.executeUpdate(sql);
+        } catch (SQLException sqle) {
+            throw new PersistenceException(sqle);
         }
     }
 

@@ -166,6 +166,7 @@ public final class SQLDatabase {
      */
     private int save(Connection connection, Object inst, boolean doIgnore, Set<String> columnNames) {
         if (inst instanceof Collection) {
+            @SuppressWarnings("unchecked")
             Collection<Object> collection = (Collection<Object>)inst;
             if (collection.isEmpty()) return 0;
             Object any = collection.iterator().next().getClass();
@@ -234,20 +235,36 @@ public final class SQLDatabase {
 
     // --- API: Delete
 
-    public int delete(Object inst) {
-        @SuppressWarnings("unchecked")
-        SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-        return table.delete(getConnection(), inst);
+    private int delete(Connection connection, Object inst) {
+        if (inst instanceof Collection) {
+            @SuppressWarnings("unchecked")
+            Collection<Object> collection = (Collection<Object>)inst;
+            if (collection.isEmpty()) return 0;
+            Object o = collection.iterator().next();
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(o.getClass());
+            if (table == null) throw new PersistenceException("Table not found found for class " + o.getClass().getName());
+            return table.delete(connection, collection);
+        } else {
+            @SuppressWarnings("unchecked")
+            SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
+            if (table == null) throw new PersistenceException("Table not found found for class " + inst.getClass().getName());
+            return table.delete(connection, Arrays.asList(inst));
+        }
     }
 
-    public void deleteAsync(Object inst, Consumer<Integer> callback) {
+    public int delete(Object inst) {
+        return delete(getConnection(), inst);
+    }
+
+        public void deleteAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                @SuppressWarnings("unchecked")
-                SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
-                int result = table.delete(getAsyncConnection(), inst);
+                int result = delete(getAsyncConnection(), inst);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
+
+    // --- API: Raw statements
 
     public int executeUpdate(String sql) {
         try {
