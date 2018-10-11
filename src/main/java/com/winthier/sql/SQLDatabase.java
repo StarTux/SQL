@@ -164,7 +164,7 @@ public final class SQLDatabase {
     /**
      * Internal save helper.
      */
-    private int save(Connection connection, Object inst, boolean doIgnore, Set<String> columnNames) {
+    private int save(Connection connection, Object inst, boolean doIgnore, boolean doUpdate, Set<String> columnNames) {
         if (inst instanceof Collection) {
             @SuppressWarnings("unchecked")
             Collection<Object> collection = (Collection<Object>)inst;
@@ -173,62 +173,73 @@ public final class SQLDatabase {
             @SuppressWarnings("unchecked")
             SQLTable<Object> table = (SQLTable<Object>)tables.get(any);
             if (table == null) throw new PersistenceException("Table not found for object of class " + any.getClass().getName());
-            return table.save(connection, collection, doIgnore, columnNames);
+            return table.save(connection, collection, doIgnore, doUpdate, columnNames);
         } else {
             @SuppressWarnings("unchecked")
             SQLTable<Object> table = (SQLTable<Object>)tables.get(inst.getClass());
             if (table == null) throw new PersistenceException("Table not found for object of class " + inst.getClass().getName());
-            return table.save(connection, Arrays.asList(inst), doIgnore, columnNames);
+            return table.save(connection, Arrays.asList(inst), doIgnore, doUpdate, columnNames);
         }
     }
 
     public int saveIgnore(Object inst) {
-        return save(getConnection(), inst, true, null);
+        return save(getConnection(), inst, true, true, null);
     }
 
     public void saveIgnoreAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, true, null);
+                int result = save(getAsyncConnection(), inst, true, true, null);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
 
     public int save(Object inst) {
-        return save(getConnection(), inst, false, null);
+        return save(getConnection(), inst, false, true, null);
     }
 
     public void saveAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, false, null);
+                int result = save(getAsyncConnection(), inst, false, true, null);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
 
     public int save(Object inst, String... fields) {
-        return save(getConnection(), inst, false, new LinkedHashSet<>(Arrays.asList(fields)));
+        return save(getConnection(), inst, false, true, new LinkedHashSet<>(Arrays.asList(fields)));
     }
 
     public void saveAsync(Object inst, Consumer<Integer> callback, String... fields) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, false, new LinkedHashSet<>(Arrays.asList(fields)));
+                int result = save(getAsyncConnection(), inst, false, true, new LinkedHashSet<>(Arrays.asList(fields)));
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
 
     public int save(Object inst, Set<String> fields) {
-        return save(getConnection(), inst, false, fields);
+        return save(getConnection(), inst, false, true, fields);
     }
 
     public void saveAsync(Object inst, Set<String> fields, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getConnection(), inst, false, fields);
+                int result = save(getAsyncConnection(), inst, false, true, fields);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }
 
     public void saveIgnoreAsync(Object inst, Set<String> fields, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getConnection(), inst, true, fields);
+                int result = save(getAsyncConnection(), inst, true, true, fields);
+                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+            });
+    }
+
+    public int insert(Object inst) {
+        return save(getConnection(), inst, false, false, null);
+    }
+
+    public void insertAsync(Object inst, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), inst, false, false, null);
                 if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
             });
     }

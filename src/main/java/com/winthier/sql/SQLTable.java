@@ -172,16 +172,19 @@ public final class SQLTable<E> {
         }
     }
 
-    int save(Connection connection, Collection<E> instances, boolean doIgnore, Set<String> columnNames) {
+    int save(Connection connection, Collection<E> instances, boolean doIgnore, boolean doUpdate, Set<String> columnNames) {
         if (instances.isEmpty()) throw new PersistenceException("Instances cannot be empty");
         // Collect all columns used in the statement
         Set<SQLColumn> columnSet = new LinkedHashSet<>(columns.size());
         if (columnNames == null || columnNames.isEmpty()) {
             // If no column names are specified, add all columns
             columnSet.addAll(columns);
+            // We never need the primary ID if this is just an insert.
+            if (!doUpdate && idColumn != null) columnSet.remove(idColumn);
         } else {
             // Always add the ID and UNIQUE KEYS
-            if (idColumn != null) columnSet.add(idColumn);
+            // We never need the primary ID if this is just an insert.
+            if (doUpdate && idColumn != null) columnSet.add(idColumn);
             for (Key key: keys) {
                 if (key.unique) {
                     for (SQLColumn uqColumn: key.columns) columnSet.add(uqColumn);
@@ -216,20 +219,20 @@ public final class SQLTable<E> {
         }
         // Write the column names
         if (columnSet.isEmpty()) throw new PersistenceException("Empty save statement: " + tableName);
-        sb.append("\n(`");
+        sb.append(" (`");
         Iterator<SQLColumn> columnIter = columnSet.iterator();
         sb.append(columnIter.next().getColumnName());
         while (columnIter.hasNext()) {
             sb.append("`, `").append(columnIter.next().getColumnName());
         }
-        sb.append("`)\nVALUES");
+        sb.append("`) VALUES");
         List<Object> values = new ArrayList<>(instances.size() * columnSet.size());
         boolean first = true;
         for (Object inst: instances) {
             if (versionColumn != null) versionColumn.updateVersionValue(inst);
             if (!first) sb.append(",");
             first = false;
-            sb.append("\n(");
+            sb.append(" (");
             columnIter = columnSet.iterator();
             columnIter.next().createSaveFragment(inst, sb, values);
             while (columnIter.hasNext()) {
@@ -240,14 +243,14 @@ public final class SQLTable<E> {
         }
         // In the presence of any non-unique columns, write the ON
         // DUPLICATE UPDATE statement.
-        if (!nonUniqueColumns.isEmpty()) {
-            sb.append("\nON DUPLICATE KEY UPDATE");
+        if (doUpdate && !nonUniqueColumns.isEmpty()) {
+            sb.append(" ON DUPLICATE KEY UPDATE");
             columnIter = nonUniqueColumns.iterator();
             SQLColumn column = columnIter.next();
-            sb.append("\n`").append(column.getColumnName()).append("`=VALUES(").append(column.getColumnName()).append(")");
+            sb.append(" `").append(column.getColumnName()).append("`=VALUES(").append(column.getColumnName()).append(")");
             while (columnIter.hasNext()) {
                 column = columnIter.next();
-                sb.append(",\n`").append(column.getColumnName()).append("`=VALUES(`").append(column.getColumnName()).append("`)");
+                sb.append(", `").append(column.getColumnName()).append("`=VALUES(`").append(column.getColumnName()).append("`)");
             }
         }
         // Build the statement
