@@ -176,13 +176,16 @@ public final class SQLTable<E> {
         if (instances.isEmpty()) throw new PersistenceException("Instances cannot be empty");
         // Collect all columns used in the statement
         Set<SQLColumn> columnSet = new LinkedHashSet<>(columns.size());
+        // An empty updateColumns means that no columns were specified
+        // to be saved.  Anything else means we update all the
+        // specified columns, and only these ones.
+        Set<SQLColumn> updateColumns = new LinkedHashSet<>(columns.size());
         if (columnNames == null || columnNames.isEmpty()) {
             // If no column names are specified, add all columns
             columnSet.addAll(columns);
             // We never need the primary ID if this is just an insert.
             if (!doUpdate && idColumn != null) columnSet.remove(idColumn);
         } else {
-            // Always add the ID and UNIQUE KEYS
             // We never need the primary ID if this is just an insert.
             if (doUpdate && idColumn != null) columnSet.add(idColumn);
             for (Key key: keys) {
@@ -203,6 +206,7 @@ public final class SQLTable<E> {
                 SQLColumn column = getColumn(columnName);
                 if (column == null) throw new PersistenceException("Field not found: " + tableName + "." + columnName);
                 columnSet.add(column);
+                updateColumns.add(column);
             }
         }
         // Build the statement
@@ -240,12 +244,12 @@ public final class SQLTable<E> {
         // Write the ON DUPLICATE UPDATE statement.
         if (doUpdate) {
             sb.append(" ON DUPLICATE KEY UPDATE");
-            columnIter = columnSet.iterator();
+            columnIter = updateColumns.isEmpty() ? columnSet.iterator() : updateColumns.iterator();
             SQLColumn column = columnIter.next();
             sb.append(" `").append(column.getColumnName()).append("`=VALUES(").append(column.getColumnName()).append(")");
             while (columnIter.hasNext()) {
                 column = columnIter.next();
-                if (column.isId()) continue;
+                if (updateColumns.isEmpty() && column.isId()) continue;
                 sb.append(", `").append(column.getColumnName()).append("`=VALUES(`").append(column.getColumnName()).append("`)");
             }
         }
