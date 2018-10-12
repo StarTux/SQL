@@ -205,10 +205,6 @@ public final class SQLTable<E> {
                 columnSet.add(column);
             }
         }
-        Set<SQLColumn> nonUniqueColumns = new LinkedHashSet<>(columns.size());
-        for (SQLColumn column: columnSet) {
-            if (!column.isUnique()) nonUniqueColumns.add(column);
-        }
         // Build the statement
         StringBuilder sb = new StringBuilder();
         // Insert statement
@@ -241,15 +237,15 @@ public final class SQLTable<E> {
             }
             sb.append(")");
         }
-        // In the presence of any non-unique columns, write the ON
-        // DUPLICATE UPDATE statement.
-        if (doUpdate && !nonUniqueColumns.isEmpty()) {
+        // Write the ON DUPLICATE UPDATE statement.
+        if (doUpdate) {
             sb.append(" ON DUPLICATE KEY UPDATE");
-            columnIter = nonUniqueColumns.iterator();
+            columnIter = columnSet.iterator();
             SQLColumn column = columnIter.next();
             sb.append(" `").append(column.getColumnName()).append("`=VALUES(").append(column.getColumnName()).append(")");
             while (columnIter.hasNext()) {
                 column = columnIter.next();
+                if (column.isId()) continue;
                 sb.append(", `").append(column.getColumnName()).append("`=VALUES(`").append(column.getColumnName()).append("`)");
             }
         }
