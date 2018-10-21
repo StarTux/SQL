@@ -86,7 +86,11 @@ final class SQLColumn {
         case INT:
             return "int(" + precision + ")";
         case STRING:
-            return "varchar(" + length + ")";
+            if (length > 1024) {
+                return "text";
+            } else {
+                return "varchar(" + length + ")";
+            }
         case UUID:
             return "varchar(40)";
         case FLOAT:
