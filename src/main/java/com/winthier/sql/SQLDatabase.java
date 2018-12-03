@@ -361,18 +361,22 @@ public final class SQLDatabase {
     // --- Utility: Async
 
     void scheduleAsyncTask(Runnable task) {
-        if (asyncWorker == null) {
-            asyncTasks = new LinkedBlockingQueue<>();
-            asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);
+        if (this.asyncWorker == null) {
+            this.asyncTasks = new LinkedBlockingQueue<>();
+            this.asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);
         }
-        asyncTasks.add(task);
+        this.asyncTasks.add(task);
     }
 
     private void asyncWorkerTask() {
         while (plugin.isEnabled()) {
             try {
-                Runnable run = asyncTasks.poll(1, TimeUnit.SECONDS);
+                Runnable run = this.asyncTasks.poll(1, TimeUnit.SECONDS);
                 if (run != null) run.run();
+                final int backlog = this.asyncTasks.size();
+                if (backlog >= 4) {
+                    this.plugin.getLogger().warning("Database backlog exceeds threshold: " + backlog);
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
