@@ -369,18 +369,18 @@ public final class SQLDatabase {
         task.run();
     }
 
-    private void asyncWorkerTask() {
-        while (plugin.isEnabled()) {
-            try {
-                Runnable run = this.asyncTasks.poll(1, TimeUnit.SECONDS);
-                if (run != null) run.run();
-                final int backlog = this.asyncTasks.size();
-                if (backlog >= 4) {
-                    this.plugin.getLogger().warning("Database backlog exceeds threshold: " + backlog);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
+    // private void asyncWorkerTask() {
+    //     while (plugin.isEnabled()) {
+    //         try {
+    //             Runnable run = this.asyncTasks.poll(1, TimeUnit.SECONDS);
+    //             if (run != null) run.run();
+    //             final int backlog = this.asyncTasks.size();
+    //             if (backlog >= 4) {
+    //                 this.plugin.getLogger().warning("Database backlog exceeds threshold: " + backlog);
+    //             }
+    //         } catch (Exception e) {
+    //             e.printStackTrace();
+    //         }
+    //     }
+    // }
 }
