@@ -36,8 +36,8 @@ public final class SQLDatabase {
     private final Config config;
     private Connection cachedConnection;
     private Connection asyncConnection;
-    private LinkedBlockingQueue<Runnable> asyncTasks;
-    private BukkitTask asyncWorker = null;
+    // private LinkedBlockingQueue<Runnable> asyncTasks;
+    // private BukkitTask asyncWorker = null;
 
     // --- Constructors
 
@@ -361,11 +361,12 @@ public final class SQLDatabase {
     // --- Utility: Async
 
     void scheduleAsyncTask(Runnable task) {
-        if (this.asyncWorker == null) {
-            this.asyncTasks = new LinkedBlockingQueue<>();
-            this.asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);
-        }
-        this.asyncTasks.add(task);
+        // if (this.asyncWorker == null) {
+        //     this.asyncTasks = new LinkedBlockingQueue<>();
+        //     this.asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);
+        // }
+        // this.asyncTasks.add(task);
+        task.run();
     }
 
     private void asyncWorkerTask() {
