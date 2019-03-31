@@ -12,7 +12,6 @@ import javax.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.bukkit.Material;
 
 @Entity
 @Table(name = "log",
@@ -27,19 +26,17 @@ public class SQLLog {
     private UUID playerUuid;
     private String playerName;
     @Column(unique = true)
-    private Material material;
     @Version private Date version;
 
     @Override
     public String toString() {
-        return String.format("SQLLog(id=%d time=%s material=%s)", id, time, material);
+        return String.format("SQLLog(id=%d time=%s)", id, time);
     }
 
     public static SQLLog mktest() {
         Random random = new Random(System.currentTimeMillis());
         SQLLog log = new SQLLog();
         log.setTime(new Date());
-        log.setMaterial(Material.values()[random.nextInt(Material.values().length)]);
         return log;
     }
 }

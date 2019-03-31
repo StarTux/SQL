@@ -1,5 +1,6 @@
 package com.winthier.sql;
 
+import cn.nukkit.Server;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.sql.Connection;
@@ -23,7 +24,6 @@ import javax.persistence.Table;
 import javax.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Value;
-import org.bukkit.Bukkit;
 
 @Getter
 public final class SQLTable<E> {
@@ -505,7 +505,7 @@ public final class SQLTable<E> {
         public void findUniqueAsync(Consumer<E> callback) {
             database.scheduleAsyncTask(() -> {
                     E result = findUnique(database.getAsyncConnection());
-                    if (callback != null) Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
+                    if (callback != null) Server.getInstance().getScheduler().scheduleTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
 
@@ -530,7 +530,7 @@ public final class SQLTable<E> {
         public void findListAsync(Consumer<List<E>> callback) {
             database.scheduleAsyncTask(() -> {
                     List<E> result = findList(database.getAsyncConnection());
-                    Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
+                    Server.getInstance().getScheduler().scheduleTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
 
@@ -550,7 +550,7 @@ public final class SQLTable<E> {
         public void deleteAsync(Consumer<Integer> callback) {
             database.scheduleAsyncTask(() -> {
                     int result = delete(database.getAsyncConnection());
-                    if (callback != null) Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
+                    if (callback != null) Server.getInstance().getScheduler().scheduleTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
 
@@ -573,7 +573,7 @@ public final class SQLTable<E> {
         public void findRowCountAsync(Consumer<Integer> callback) {
             database.scheduleAsyncTask(() -> {
                     int result = findRowCount(database.getAsyncConnection());
-                    Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
+                    Server.getInstance().getScheduler().scheduleTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
 

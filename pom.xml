@@ -2,16 +2,16 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.winthier.sql</groupId>
-  <artifactId>sql</artifactId>
+  <artifactId>sql-nukkit</artifactId>
   <packaging>jar</packaging>
   <version>0.1-SNAPSHOT</version>
   <name>SQL</name>
   <url>https://cavetale.com</url>
   <repositories>
-    <!-- Spigot Repo -->
+    <!-- Nukkit Repo -->
     <repository>
-      <id>spigot-repo</id>
-      <url>https://hub.spigotmc.org/nexus/content/groups/public/</url>
+      <id>nukkit-repo</id>
+      <url>https://repo.nukkitx.com/snapshot</url>
     </repository>
   </repositories>
   <dependencies>
@@ -22,12 +22,18 @@
       <version>4.11</version>
       <scope>test</scope>
     </dependency>
-    <!-- Spigot-API -->
+    <!-- Nukkit API -->
     <dependency>
-      <groupId>org.spigotmc</groupId>
-      <artifactId>spigot-api</artifactId>
-      <version>1.13.1-R0.1-SNAPSHOT</version>
+      <groupId>cn.nukkit</groupId>
+      <artifactId>nukkit</artifactId>
+      <version>1.0-SNAPSHOT</version>
       <scope>provided</scope>
+    </dependency>
+    <!-- MySQL, not included in Nukkit -->
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>5.1.6</version>
     </dependency>
     <!-- Lombok -->
     <dependency>
@@ -41,12 +47,6 @@
       <groupId>org.eclipse.persistence</groupId>
       <artifactId>javax.persistence</artifactId>
       <version>2.1.1</version>
-    </dependency>
-    <!-- Plugin Annotations -->
-    <dependency>
-      <groupId>org.spigotmc</groupId>
-      <artifactId>plugin-annotations</artifactId>
-      <version>1.2.0-SNAPSHOT</version>
     </dependency>
   </dependencies>
   <build>
@@ -84,6 +84,12 @@
                   <artifact>org.eclipe.persistence:javax.persistence</artifact>
                   <includes>
                     <include>javax/persistence/**</include>
+                  </includes>
+                </filter>
+                <filter>
+                  <artifact>mysql:mysql-connector-java</artifact>
+                  <includes>
+                    <include>com/mysql/**</include>
                   </includes>
                 </filter>
               </filters>

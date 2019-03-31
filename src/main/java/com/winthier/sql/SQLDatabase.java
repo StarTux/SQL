@@ -1,8 +1,12 @@
 package com.winthier.sql;
 
+import cn.nukkit.Server;
+import cn.nukkit.plugin.Plugin;
+import cn.nukkit.scheduler.TaskHandler;
+import cn.nukkit.utils.Config;
+import cn.nukkit.utils.ConfigSection;
 import java.io.File;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -20,40 +24,34 @@ import java.util.function.Consumer;
 import javax.persistence.PersistenceException;
 import lombok.Data;
 import lombok.Getter;
-import org.bukkit.Bukkit;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
 @Getter
 public final class SQLDatabase {
-    private final JavaPlugin plugin;
+    private final Plugin plugin;
     private final Map<Class<?>, SQLTable<?>> tables = new HashMap<>();
     private static final String SQL_CONFIG_FILE = "sql.yml";
     private final boolean debug;
-    private final Config config;
+    private final SQLConfig config;
     private Connection cachedConnection;
     private Connection asyncConnection;
     private LinkedBlockingQueue<Runnable> asyncTasks;
-    private BukkitTask asyncWorker = null;
+    private TaskHandler asyncWorker = null;
 
     // --- Constructors
 
-    public SQLDatabase(JavaPlugin plugin) {
+    public SQLDatabase(Plugin plugin) {
         this.plugin = plugin;
-        config = new Config();
+        config = new SQLConfig();
         config.setHost("127.0.0.1");
         config.setPort("3306");
         config.setDatabase(plugin.getName());
         config.setUser("user");
         config.setPassword("password");
-        Plugin sqlPlugin = Bukkit.getPluginManager().getPlugin("SQL");
+        Plugin sqlPlugin = Server.getInstance().getPluginManager().getPlugin("SQL");
         if (sqlPlugin != null) {
-            config.load(sqlPlugin.getConfig().getConfigurationSection("database"));
+            config.load(sqlPlugin.getConfig().getSection("database"));
         }
-        config.load(getPluginDatabaseConfig());
+        config.load(getPluginDatabaseConfig().getRootSection());
         this.debug = config.isDebug();
         debugLog(config);
     }
@@ -73,26 +71,26 @@ public final class SQLDatabase {
     // --- Utility: Configuration
 
     @Data
-    final class Config {
+    final class SQLConfig {
         private String host = "", port = "", database = "", prefix = "", user = "", password = "";
         private boolean debug;
 
-        void load(ConfigurationSection c) {
+        void load(ConfigSection c) {
             final String name = plugin.getName();
             final String lowerName = SQLUtil.camelToLowerCase(name);
-            String cHost = c.getString("host");
-            String cPort = c.getString("port");
-            String cDatabase = c.getString("database");
-            String cPrefix = c.getString("prefix");
-            String cUser = c.getString("user");
-            String cPassword = c.getString("password");
+            String cHost =     !c.exists("host")     ? null : c.getString("host");
+            String cPort =     !c.exists("port")     ? null : c.getString("port");
+            String cDatabase = !c.exists("database") ? null : c.getString("database");
+            String cPrefix =   !c.exists("prefix")   ? null : c.getString("prefix");
+            String cUser =     !c.exists("user")     ? null : c.getString("user");
+            String cPassword = !c.exists("password") ? null : c.getString("password");
             if (cHost != null && !cHost.isEmpty()) this.host = cHost;
             if (cPort != null && !cPort.isEmpty()) this.port = cPort;
             if (cDatabase != null && !cDatabase.isEmpty()) this.database = cDatabase.replace("{NAME}", name);
             if (cPrefix != null) this.prefix = cPrefix.replace("{NAME}", lowerName);
             if (cUser != null && !cUser.isEmpty()) this.user = cUser;
             if (cPassword != null && !cPassword.isEmpty()) this.password = cPassword;
-            if (c.isSet("debug")) this.debug = c.getBoolean("debug");
+            if (c.exists("debug")) this.debug = c.getBoolean("debug");
         }
 
         String getUrl() {
@@ -105,13 +103,14 @@ public final class SQLDatabase {
         }
     }
 
-    ConfigurationSection getPluginDatabaseConfig() {
+    Config getPluginDatabaseConfig() {
         File file = new File(plugin.getDataFolder(), SQL_CONFIG_FILE);
-        YamlConfiguration pluginConfig = YamlConfiguration.loadConfiguration(file);
+        Config pluginConfig = new Config(file);
         InputStream inp = plugin.getResource(SQL_CONFIG_FILE);
         if (inp != null) {
-            YamlConfiguration defaultConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(inp));
-            pluginConfig.setDefaults(defaultConfig);
+            Config defaultConfig = new Config();
+            defaultConfig.load(inp);
+            pluginConfig.setDefault(defaultConfig.getRootSection());
         }
         return pluginConfig;
     }
@@ -189,7 +188,7 @@ public final class SQLDatabase {
     public void saveIgnoreAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), inst, true, true, null);
-                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                if (callback != null) Server.getInstance().getScheduler().scheduleTask(plugin, () -> callback.accept(result));
             });
     }
 
@@ -200,7 +199,7 @@ public final class SQLDatabase {
     public void saveAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), inst, false, true, null);
-                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                if (callback != null) Server.getInstance().getScheduler().scheduleTask(plugin, () -> callback.accept(result));
             });
     }
 
@@ -211,7 +210,7 @@ public final class SQLDatabase {
     public void saveAsync(Object inst, Consumer<Integer> callback, String... fields) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), inst, false, true, new LinkedHashSet<>(Arrays.asList(fields)));
-                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                if (callback != null) Server.getInstance().getScheduler().scheduleTask(plugin, () -> callback.accept(result));
             });
     }
 
@@ -222,14 +221,14 @@ public final class SQLDatabase {
     public void saveAsync(Object inst, Set<String> fields, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), inst, false, true, fields);
-                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                if (callback != null) Server.getInstance().getScheduler().scheduleTask(plugin, () -> callback.accept(result));
             });
     }
 
     public void saveIgnoreAsync(Object inst, Set<String> fields, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), inst, true, true, fields);
-                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                if (callback != null) Server.getInstance().getScheduler().scheduleTask(plugin, () -> callback.accept(result));
             });
     }
 
@@ -240,7 +239,7 @@ public final class SQLDatabase {
     public void insertAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), inst, false, false, null);
-                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                if (callback != null) Server.getInstance().getScheduler().scheduleTask(plugin, () -> callback.accept(result));
             });
     }
 
@@ -271,7 +270,7 @@ public final class SQLDatabase {
         public void deleteAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = delete(getAsyncConnection(), inst);
-                if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                if (callback != null) Server.getInstance().getScheduler().scheduleTask(plugin, () -> callback.accept(result));
             });
     }
 
@@ -293,7 +292,7 @@ public final class SQLDatabase {
                     Statement statement = getAsyncConnection().createStatement();
                     debugLog(sql);
                     int result = statement.executeUpdate(sql);
-                    if (callback != null) Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                    if (callback != null) Server.getInstance().getScheduler().scheduleTask(plugin, () -> callback.accept(result));
                 } catch (SQLException sqle) {
                     throw new PersistenceException(sqle);
                 }
@@ -316,7 +315,7 @@ public final class SQLDatabase {
                     Statement statement = getAsyncConnection().createStatement();
                     debugLog(sql);
                     ResultSet result = statement.executeQuery(sql);
-                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                    Server.getInstance().getScheduler().scheduleTask(plugin, () -> callback.accept(result));
                 } catch (SQLException sqle) {
                     throw new PersistenceException(sqle);
                 }
@@ -363,7 +362,7 @@ public final class SQLDatabase {
     void scheduleAsyncTask(Runnable task) {
         if (this.asyncWorker == null) {
             this.asyncTasks = new LinkedBlockingQueue<>();
-            this.asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);
+            this.asyncWorker = Server.getInstance().getScheduler().scheduleTask(plugin, this::asyncWorkerTask, true);
         }
         this.asyncTasks.add(task);
     }
