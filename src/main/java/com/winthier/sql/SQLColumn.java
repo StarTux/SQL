@@ -6,7 +6,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.UUID;
@@ -132,7 +131,8 @@ final class SQLColumn {
             Object value;
             switch (type) {
             case UUID:
-                String str = result.getObject(getColumnName(), String.class);
+                String str = result.getString(getColumnName());
+                if (result.wasNull()) value = null;
                 if (str == null) {
                     value = null;
                 } else {
@@ -140,7 +140,8 @@ final class SQLColumn {
                 }
                 break;
             case DATE:
-                value = result.getObject(getColumnName(), java.sql.Timestamp.class);
+                value = result.getTimestamp(getColumnName());
+                if (result.wasNull()) value = null;
                 break;
             case ENUM:
                 int num = result.getInt(getColumnName());
@@ -170,16 +171,32 @@ final class SQLColumn {
                     value = refTable.find(connection, num);
                 }
                 break;
+            case INT:
+                value = result.getInt(getColumnName());
+                if (result.wasNull()) value = null;
+                break;
+            case STRING:
+                value = result.getString(getColumnName());
+                if (result.wasNull()) value = null;
+                break;
+            case FLOAT:
+                value = result.getFloat(getColumnName());
+                if (result.wasNull()) value = null;
+                break;
+            case DOUBLE:
+                value = result.getDouble(getColumnName());
+                if (result.wasNull()) value = null;
+                break;
+            case BOOL:
+                value = result.getBoolean(getColumnName());
+                if (result.wasNull()) value = null;
+                break;
             default:
-                value = result.getObject(getColumnName(), field.getType());
+                throw new IllegalArgumentException("Unsupported type: " + type);
             }
             setterMethod.invoke(inst, value);
-        } catch (SQLException sqle) {
-            throw new PersistenceException(sqle);
-        } catch (IllegalAccessException iae) {
-            throw new PersistenceException(iae);
-        } catch (InvocationTargetException ite) {
-            throw new PersistenceException(ite);
+        } catch (Throwable t) {
+            throw new PersistenceException(t);
         }
     }
 
