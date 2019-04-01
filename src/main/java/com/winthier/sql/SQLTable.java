@@ -67,7 +67,11 @@ public final class SQLTable<E> {
                 || Map.class.isAssignableFrom(field.getType())) continue;
             SQLColumn column = new SQLColumn(this, field);
             columns.add(column);
-            if (column.isId()) idColumn = column;
+            if (column.isId()) {
+                idColumn = column;
+            } else if (column.isUnique()) {
+                keys.add(Key.of(column));
+            }
             if (column.isVersion()) versionColumn = column;
         }
         // Keys
