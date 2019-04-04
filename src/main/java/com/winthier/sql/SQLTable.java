@@ -100,7 +100,7 @@ public final class SQLTable<E> {
                 for (Index index: indexes) {
                     counter += 1;
                     String name = "key_" + getTableName() + "_" + counter;
-                    if (index.name() != null) name = index.name();
+                    if (index.name() != null && !index.name().isEmpty()) name = index.name();
                     List<SQLColumn> indexColumns = new ArrayList<>();
                     for (String columnName: index.columnList().split(", ?")) {
                         SQLColumn column = getColumn(columnName);
