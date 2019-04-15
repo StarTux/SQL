@@ -144,7 +144,7 @@ final class SQLColumn {
                 break;
             case ENUM:
                 int num = result.getInt(getColumnName());
-                if (result.wasNull()) {
+                if (num == 0 && result.wasNull()) {
                     value = null;
                 } else {
                     try {
@@ -160,7 +160,7 @@ final class SQLColumn {
                 break;
             case REFERENCE:
                 num = result.getInt(getColumnName());
-                if (result.wasNull()) {
+                if (num == 0 && result.wasNull()) {
                     value = null;
                 } else {
                     SQLTable refTable = table.getDatabase().getTable(field.getType());
