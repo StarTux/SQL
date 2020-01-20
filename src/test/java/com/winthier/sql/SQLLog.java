@@ -20,7 +20,7 @@ import org.bukkit.Material;
 @Getter
 @Setter
 @NoArgsConstructor
-public class SQLLog {
+public final class SQLLog {
     @Id private Integer id;
     @Column(nullable = false)
     private Date time;

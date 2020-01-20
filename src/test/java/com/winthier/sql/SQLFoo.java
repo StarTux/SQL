@@ -18,7 +18,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class SQLFoo {
+public final class SQLFoo {
     @Id private Integer id;
     @Column(nullable = false)
     private Date time;
