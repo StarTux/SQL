@@ -6,3 +6,4 @@ database:
   database: ''
   prefix: ''
   optimisticLocking: false
+  backlogThreshold: 1000
