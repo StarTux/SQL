@@ -54,14 +54,14 @@ public final class SQLDatabase {
             config.load(sqlPlugin.getConfig().getConfigurationSection("database"));
         }
         config.load(getPluginDatabaseConfig());
-        this.debug = config.isDebug();
+        debug = config.isDebug();
         debugLog(config);
     }
 
     private SQLDatabase(SQLDatabase other) {
-        this.plugin = other.plugin;
-        this.config = other.config;
-        this.debug = other.debug;
+        plugin = other.plugin;
+        config = other.config;
+        debug = other.debug;
     }
 
     public SQLDatabase async() {
@@ -86,13 +86,13 @@ public final class SQLDatabase {
             String cPrefix = c.getString("prefix");
             String cUser = c.getString("user");
             String cPassword = c.getString("password");
-            if (cHost != null && !cHost.isEmpty()) this.host = cHost;
-            if (cPort != null && !cPort.isEmpty()) this.port = cPort;
-            if (cDatabase != null && !cDatabase.isEmpty()) this.database = cDatabase.replace("{NAME}", name);
-            if (cPrefix != null) this.prefix = cPrefix.replace("{NAME}", lowerName);
-            if (cUser != null && !cUser.isEmpty()) this.user = cUser;
-            if (cPassword != null && !cPassword.isEmpty()) this.password = cPassword;
-            if (c.isSet("debug")) this.debug = c.getBoolean("debug");
+            if (cHost != null && !cHost.isEmpty()) host = cHost;
+            if (cPort != null && !cPort.isEmpty()) port = cPort;
+            if (cDatabase != null && !cDatabase.isEmpty()) database = cDatabase.replace("{NAME}", name);
+            if (cPrefix != null) prefix = cPrefix.replace("{NAME}", lowerName);
+            if (cUser != null && !cUser.isEmpty()) user = cUser;
+            if (cPassword != null && !cPassword.isEmpty()) password = cPassword;
+            if (c.isSet("debug")) debug = c.getBoolean("debug");
         }
 
         String getUrl() {
@@ -361,21 +361,53 @@ public final class SQLDatabase {
     // --- Utility: Async
 
     void scheduleAsyncTask(Runnable task) {
-        if (this.asyncWorker == null) {
-            this.asyncTasks = new LinkedBlockingQueue<>();
-            this.asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);
+        if (!plugin.isEnabled()) {
+            plugin.getLogger().warning("[SQL] Attempt to schedule async tasks"
+                                       + " while plugin is enabled!");
         }
-        this.asyncTasks.add(task);
+        if (asyncWorker == null) {
+            asyncTasks = new LinkedBlockingQueue<>();
+            asyncWorker = Bukkit.getScheduler()
+                .runTaskAsynchronously(plugin, this::asyncWorkerTask);
+        }
+        asyncTasks.add(task);
     }
 
     private void asyncWorkerTask() {
-        while (plugin.isEnabled()) {
+        final int threshold = 1000;
+        boolean warned = false;
+        while (plugin.isEnabled() || !asyncTasks.isEmpty()) {
             try {
-                Runnable run = this.asyncTasks.poll(1, TimeUnit.SECONDS);
+                Runnable run = asyncTasks.poll(1, TimeUnit.SECONDS);
                 if (run != null) run.run();
+                int backlog = asyncTasks.size();
+                if (backlog > threshold) {
+                    if (!warned) {
+                        warned = true;
+                        plugin.getLogger()
+                            .warning("[SQL] Backlog exceeds threshold: "
+                                     + backlog + " > " + threshold);
+                    }
+                } else {
+                    warned = false;
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     }
+
+    public void waitForAsyncTask() {
+        if (asyncTasks == null) return;
+        while (true) {
+            if (asyncTasks.isEmpty()) return;
+            try {
+                Thread.sleep(50L);
+            } catch (InterruptedException ie) {
+                ie.printStackTrace();
+                break;
+            }
+        }
+    }
 }
+
