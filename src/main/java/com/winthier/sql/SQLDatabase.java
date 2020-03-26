@@ -457,7 +457,9 @@ public final class SQLDatabase {
 
     public void waitForAsyncTask() {
         if (asyncQueue == null) return;
-        plugin.getLogger().info("[SQL] " + asyncQueue.size() + " tasks pending");
+        int pending = asyncQueue.size();
+        if (pending == 0) return;
+        plugin.getLogger().info("[SQL] " + pending + " tasks pending");
         while (true) {
             if (asyncQueue.isEmpty()) return;
             try {
