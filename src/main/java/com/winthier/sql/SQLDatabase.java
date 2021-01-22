@@ -204,6 +204,15 @@ public final class SQLDatabase {
         }
     }
 
+    private int update(Connection connection, Object inst, Set<String> columnNames) {
+        @SuppressWarnings("unchecked")
+        SQLTable<Object> table = (SQLTable<Object>) tables.get(inst.getClass());
+        if (table == null) {
+            throw new PersistenceException("Table not found for object of class " + inst.getClass().getName());
+        }
+        return table.update(connection, inst, columnNames);
+    }
+
     public int saveIgnore(Object inst) {
         return save(getConnection(), inst, true, true, null);
     }
@@ -261,6 +270,19 @@ public final class SQLDatabase {
     public void saveIgnoreAsync(Object inst, Set<String> fields, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), inst, true, true, fields);
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
+    public int update(Object inst, String... fields) {
+        return update(getConnection(), inst, new LinkedHashSet<>(Arrays.asList(fields)));
+    }
+
+    public void updateAsync(Object inst, Consumer<Integer> callback, String... fields) {
+        scheduleAsyncTask(() -> {
+                int result = update(getAsyncConnection(), inst, new LinkedHashSet<>(Arrays.asList(fields)));
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }

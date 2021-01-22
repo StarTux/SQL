@@ -275,6 +275,45 @@ public final class SQLTable<E> {
         }
     }
 
+    int update(Connection connection, E instance, Set<String> columnNames) {
+        if (idColumn == null) throw new IllegalStateException("No id column: " + tableName);
+        List<SQLColumn> columnList = new ArrayList<>();
+        if (columnNames == null || columnNames.isEmpty()) {
+            columnList.addAll(columns);
+            columnList.remove(idColumn);
+        } else {
+            for (String columnName : columnNames) {
+                SQLColumn column = getColumn(columnName);
+                if (column == null) throw new PersistenceException("Field not found: " + tableName + "." + columnName);
+                columnList.add(column);
+            }
+        }
+        // Build the statement
+        List<Object> values = new ArrayList<>(1 + columnList.size());
+        StringBuilder sb = new StringBuilder();
+        sb.append("UPDATE `").append(getTableName()).append("` SET");
+        Iterator<SQLColumn> iter = columnList.iterator();
+        SQLColumn column = iter.next();
+        sb.append(" `").append(column.getColumnName()).append("` = ?");
+        values.add(column.getValue(instance));
+        while (iter.hasNext()) {
+            column = iter.next();
+            sb.append(", `").append(column.getColumnName()).append("` = ?");
+            values.add(column.getValue(instance));
+        }
+        sb.append(" WHERE `").append(idColumn.getColumnName()).append("` = ?");
+        values.add(idColumn.getValue(instance));
+        // Build the statement
+        try (PreparedStatement statement = connection.prepareStatement(sb.toString(), Statement.RETURN_GENERATED_KEYS)) {
+            SQLUtil.formatStatement(statement, values);
+            database.debugLog(statement);
+            int ret = statement.executeUpdate();
+            return ret;
+        } catch (SQLException sqle) {
+            throw new PersistenceException(sqle);
+        }
+    }
+
     int delete(Connection connection, Collection<Object> collection) {
         if (collection.isEmpty()) return -1;
         if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
