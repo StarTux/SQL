@@ -31,7 +31,6 @@ public final class SQLTable<E> {
     private final SQLDatabase database;
     private String tableName;
     private SQLColumn idColumn;
-    private SQLColumn versionColumn;
     private final List<Key> keys = new ArrayList<>();
     private final List<SQLColumn> columns = new ArrayList<>();
 
@@ -72,7 +71,6 @@ public final class SQLTable<E> {
             } else if (column.isUnique()) {
                 keys.add(Key.of(column));
             }
-            if (column.isVersion()) versionColumn = column;
         }
         // Keys
         if (tableAnnotation != null) {
@@ -198,10 +196,6 @@ public final class SQLTable<E> {
                     for (SQLColumn uqColumn: key.columns) columnSet.add(uqColumn);
                 }
             }
-            // Add the version if one exists
-            if (versionColumn != null) {
-                columnSet.add(versionColumn);
-            }
             for (SQLColumn column: columns) {
                 if (!column.isNullable()) {
                     columnSet.add(column);
@@ -234,7 +228,6 @@ public final class SQLTable<E> {
         List<Object> values = new ArrayList<>(instances.size() * columnSet.size());
         boolean first = true;
         for (Object inst: instances) {
-            if (versionColumn != null) versionColumn.updateVersionValue(inst);
             if (!first) sb.append(",");
             first = false;
             sb.append(" (");

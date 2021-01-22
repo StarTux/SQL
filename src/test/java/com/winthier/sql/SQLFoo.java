@@ -8,7 +8,6 @@ import javax.persistence.Id;
 import javax.persistence.Index;
 import javax.persistence.OneToOne;
 import javax.persistence.Table;
-import javax.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -24,7 +23,6 @@ public final class SQLFoo {
     private Date time;
     @OneToOne
     private SQLLog bar;
-    @Version private Integer version;
 
     @Override
     public String toString() {

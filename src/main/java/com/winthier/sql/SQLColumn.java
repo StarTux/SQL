@@ -14,7 +14,6 @@ import javax.persistence.Column;
 import javax.persistence.EntityNotFoundException;
 import javax.persistence.Id;
 import javax.persistence.PersistenceException;
-import javax.persistence.Version;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -30,7 +29,6 @@ final class SQLColumn {
     private final SQLType type;
     private final boolean id;
     @Setter private boolean unique;
-    private final boolean version;
     private Method getterMethod;
     private Method setterMethod;
 
@@ -39,16 +37,15 @@ final class SQLColumn {
         this.field = field;
         Column columnAnnotation = field.getAnnotation(Column.class);
         this.id = field.getAnnotation(Id.class) != null;
-        this.version = field.getAnnotation(Version.class) != null;
         if (columnAnnotation != null) {
             this.columnName = columnAnnotation.name();
             this.columnDefinition = columnAnnotation.columnDefinition();
-            this.nullable = columnAnnotation.nullable() && !id && !version;
+            this.nullable = columnAnnotation.nullable() && !id;
             this.length = columnAnnotation.length();
             this.precision = columnAnnotation.precision() > 0 ? columnAnnotation.precision() : 11;
             this.unique = columnAnnotation.unique();
         } else {
-            this.nullable = !id && !version;
+            this.nullable = !id;
             this.length = 255;
             this.precision = 11;
             this.unique = this.id;
@@ -217,23 +214,6 @@ final class SQLColumn {
                 values.add(value);
             }
         }
-    }
-
-    void updateVersionValue(Object inst) {
-        Object newValue;
-        if (type == SQLType.INT) {
-            Object oldValue = getValue(inst);
-            if (oldValue == null) {
-                newValue = 1;
-            } else {
-                newValue = (Integer)oldValue + 1;
-            }
-        } else if (type == SQLType.DATE) {
-            newValue = new Timestamp((System.currentTimeMillis() / 1000L) * 1000L);
-        } else {
-            throw new PersistenceException("Unsupported version type: " + field.getType());
-        }
-        setValue(inst, newValue);
     }
 
     Object getValue(Object inst) {

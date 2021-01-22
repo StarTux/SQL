@@ -22,7 +22,6 @@ user: 'user'
 password: 'password'
 database: ''
 prefix: ''
-optimisticLocking: false
 ```
 
 ## Annotations
@@ -33,4 +32,3 @@ Table classes can and should be described with annotations.  This plugin respect
 - OneToMany
 - Table
 - UniqueConstraint
-- Version
