@@ -36,10 +36,11 @@ public final class SQLDatabase {
     private static final String SQL_CONFIG_FILE = "sql.yml";
     private final boolean debug;
     private final Config config;
-    private Connection cachedConnection;
+    private Connection primaryConnection;
     private Connection asyncConnection;
     private LinkedBlockingQueue<Runnable> asyncQueue;
     private BukkitTask asyncWorker = null;
+    private Thread asyncThread = null;
 
     // --- Constructors
 
@@ -394,10 +395,22 @@ public final class SQLDatabase {
     // --- Utility: Connection
 
     public Connection getConnection() {
+        if (Bukkit.isPrimaryThread()) {
+            return getPrimaryConnection();
+        }
+        if (Thread.currentThread().equals(asyncThread)) {
+            return getAsyncConnection();
+        }
+        plugin.getLogger().warning("SQLDatabase.getConnection() called from neither primary now async worker thread!");
+        new Exception().printStackTrace();
+        return getAsyncConnection();
+    }
+
+    public Connection getPrimaryConnection() {
         try {
-            if (cachedConnection == null || !cachedConnection.isValid(1)) {
+            if (primaryConnection == null || !primaryConnection.isValid(1)) {
                 Class.forName("com.mysql.jdbc.Driver");
-                cachedConnection = DriverManager
+                primaryConnection = DriverManager
                     .getConnection(config.getUrl(), config.getUser(), config.getPassword());
             }
         } catch (SQLException sqle) {
@@ -405,7 +418,7 @@ public final class SQLDatabase {
         } catch (ClassNotFoundException cnfe) {
             throw new PersistenceException(cnfe);
         }
-        return cachedConnection;
+        return primaryConnection;
     }
 
     public Connection getAsyncConnection() {
@@ -430,10 +443,10 @@ public final class SQLDatabase {
 
     // --- Utility: Async
 
-    void scheduleAsyncTask(Runnable task) {
+    public void scheduleAsyncTask(Runnable task) {
         if (!plugin.isEnabled()) {
             plugin.getLogger().warning("[SQL] Attempt to schedule async tasks"
-                                       + " while plugin is enabled!");
+                                       + " while plugin is disabled!");
         }
         if (asyncWorker == null) {
             asyncQueue = new LinkedBlockingQueue<>();
@@ -448,6 +461,7 @@ public final class SQLDatabase {
     }
 
     private void asyncWorkerTask() {
+        asyncThread = Thread.currentThread();
         List<Runnable> tasks = new ArrayList<>();
         while (plugin.isEnabled() || !asyncQueue.isEmpty()) {
             try {
