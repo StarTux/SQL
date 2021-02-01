@@ -7,7 +7,6 @@ import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.util.List;
 import java.util.UUID;
 import javax.persistence.Column;
@@ -32,7 +31,7 @@ final class SQLColumn {
     private Method getterMethod;
     private Method setterMethod;
 
-    SQLColumn(SQLTable table, Field field) {
+    SQLColumn(final SQLTable table, final Field field) {
         this.table = table;
         this.field = field;
         Column columnAnnotation = field.getAnnotation(Column.class);
@@ -209,7 +208,7 @@ final class SQLColumn {
                 if (refId == null) throw new NullPointerException("Referenced table has no id: " + value.getClass().getName() + ": " + value);
                 values.add(refId);
             } else if (type == SQLType.ENUM) {
-                values.add(((Enum)value).ordinal());
+                values.add(((Enum) value).ordinal());
             } else {
                 values.add(value);
             }

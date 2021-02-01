@@ -61,21 +61,21 @@ public final class SQLUtil {
             Object value = values.get(i);
             int index = i + 1;
             if (value instanceof String) {
-                statement.setString(index, (String)value);
+                statement.setString(index, (String) value);
             } else if (value instanceof Date) {
-                statement.setTimestamp(index, new Timestamp(((Date)value).getTime()));
+                statement.setTimestamp(index, new Timestamp(((Date) value).getTime()));
             } else if (value instanceof Boolean) {
-                statement.setBoolean(index, (Boolean)value);
+                statement.setBoolean(index, (Boolean) value);
             } else if (value instanceof Integer) {
-                statement.setInt(index, (Integer)value);
+                statement.setInt(index, (Integer) value);
             } else if (value instanceof Float) {
-                statement.setFloat(index, (Float)value);
+                statement.setFloat(index, (Float) value);
             } else if (value instanceof Double) {
-                statement.setDouble(index, (Double)value);
+                statement.setDouble(index, (Double) value);
             } else if (value instanceof UUID) {
                 statement.setString(index, value.toString());
             } else if (value instanceof Enum) {
-                statement.setString(index, ((Enum)value).name());
+                statement.setString(index, ((Enum) value).name());
             } else {
                 String name = value == null ? "null" : value.getClass().getName();
                 throw new IllegalArgumentException("Unexpected type in '" + statement + "': " + name + ", " + values + ", ArrayIndex=" + i);

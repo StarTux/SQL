@@ -45,7 +45,7 @@ public final class SQLTable<E> {
         }
     }
 
-    SQLTable(Class<E> clazz, SQLDatabase database) {
+    SQLTable(final Class<E> clazz, final SQLDatabase database) {
         this.clazz = clazz;
         this.database = database;
         Table tableAnnotation = clazz.getAnnotation(Table.class);
@@ -165,7 +165,7 @@ public final class SQLTable<E> {
                 column.load(connection, row, result);
             }
             if (row instanceof SQLInterface) {
-                ((SQLInterface)row).onLoad(result);
+                ((SQLInterface) row).onLoad(result);
             }
             return row;
         } catch (InstantiationException ie) {
@@ -319,9 +319,9 @@ public final class SQLTable<E> {
         if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
         Iterator<?> iter = collection.iterator();
         StringBuilder sb = new StringBuilder();
-        sb.append((Integer)idColumn.getValue(iter.next()));
+        sb.append((Integer) idColumn.getValue(iter.next()));
         while (iter.hasNext()) {
-            sb.append(", ").append((Integer)idColumn.getValue(iter.next()));
+            sb.append(", ").append((Integer) idColumn.getValue(iter.next()));
         }
         try (Statement statement = connection.createStatement()) {
             String sql = "DELETE FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " IN (" + sb.toString() + ")";
@@ -363,8 +363,10 @@ public final class SQLTable<E> {
         LTE("<="),
         GTE(">="),
         LIKE("LIKE");
+
         public final String symbol;
-        Comparison(String symbol) {
+
+        Comparison(final String symbol) {
             this.symbol = symbol;
         }
     }
@@ -373,7 +375,8 @@ public final class SQLTable<E> {
         private final StringBuilder sb = new StringBuilder();
         private final List<Object> values = new ArrayList<>();
         private String conj = " WHERE ";
-        private int offset = -1, limit = -1;
+        private int offset = -1;
+        private int limit = -1;
         private final List<String> order = new ArrayList<>();
         private static final String DEFAULT_CONJ = " AND ";
 
