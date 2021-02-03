@@ -294,9 +294,22 @@ public final class SQLDatabase {
         return save(getConnection(), inst, false, false, null);
     }
 
+    public int insertIgnore(Object inst) {
+        return save(getConnection(), inst, true, false, null);
+    }
+
     public void insertAsync(Object inst, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), inst, false, false, null);
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
+    public void insertIgnoreAsync(Object inst, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), inst, true, false, null);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
