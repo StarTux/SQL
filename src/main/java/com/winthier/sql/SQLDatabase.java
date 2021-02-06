@@ -414,7 +414,7 @@ public final class SQLDatabase {
         if (Thread.currentThread().equals(asyncThread)) {
             return getAsyncConnection();
         }
-        plugin.getLogger().warning("SQLDatabase.getConnection() called from neither primary now async worker thread!");
+        plugin.getLogger().warning("SQLDatabase.getConnection() called from neither primary nor async worker thread!");
         new Exception().printStackTrace();
         return getAsyncConnection();
     }
