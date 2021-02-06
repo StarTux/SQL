@@ -264,9 +264,7 @@ public final class SQLTable<E> {
                             int newId = keySet.getInt(1);
                             idColumn.setValue(inst, newId);
                         } else {
-                            if (!doIgnore) {
-                                throw new PersistenceException("Missing generated ID for instance: " + inst);
-                            }
+                            throw new PersistenceException("Missing generated ID for instance: " + inst);
                         }
                     }
                 }
