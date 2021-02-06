@@ -462,9 +462,12 @@ public final class SQLDatabase {
                                        + " while plugin is disabled!");
         }
         if (asyncWorker == null) {
-            asyncQueue = new LinkedBlockingQueue<>();
-            asyncWorker = Bukkit.getScheduler()
-                .runTaskAsynchronously(plugin, this::asyncWorkerTask);
+            synchronized(this) {
+                if (asyncWorker == null) {
+                    asyncQueue = new LinkedBlockingQueue<>();
+                    asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);
+                }
+            }
         }
         try {
             asyncQueue.put(task);
