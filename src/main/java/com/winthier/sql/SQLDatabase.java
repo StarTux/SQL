@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import javax.persistence.PersistenceException;
@@ -38,9 +39,10 @@ public final class SQLDatabase {
     private final Config config;
     private Connection primaryConnection;
     private Connection asyncConnection;
-    private LinkedBlockingQueue<Runnable> asyncQueue;
+    private LinkedBlockingQueue<Runnable> asyncQueue = new LinkedBlockingQueue<>();
     private BukkitTask asyncWorker = null;
     private Thread asyncThread = null;
+    private Semaphore asyncSemaphore = new Semaphore(1);
 
     // --- Constructors
 
@@ -59,6 +61,12 @@ public final class SQLDatabase {
         config.load(getPluginDatabaseConfig());
         debug = config.isDebug();
         debugLog(config);
+        try {
+            asyncSemaphore.acquire();
+        } catch (InterruptedException ie) {
+            ie.printStackTrace();
+        }
+        asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);
     }
 
     private SQLDatabase(final SQLDatabase other) {
@@ -414,7 +422,7 @@ public final class SQLDatabase {
         if (Thread.currentThread().equals(asyncThread)) {
             return getAsyncConnection();
         }
-        plugin.getLogger().warning("SQLDatabase.getConnection() called from neither primary now async worker thread!");
+        plugin.getLogger().warning("SQLDatabase.getConnection() called from neither primary nor async worker thread!");
         new Exception().printStackTrace();
         return getAsyncConnection();
     }
@@ -461,11 +469,6 @@ public final class SQLDatabase {
             plugin.getLogger().warning("[SQL] Attempt to schedule async tasks"
                                        + " while plugin is disabled!");
         }
-        if (asyncWorker == null) {
-            asyncQueue = new LinkedBlockingQueue<>();
-            asyncWorker = Bukkit.getScheduler()
-                .runTaskAsynchronously(plugin, this::asyncWorkerTask);
-        }
         try {
             asyncQueue.put(task);
         } catch (InterruptedException ie) {
@@ -476,46 +479,43 @@ public final class SQLDatabase {
     private void asyncWorkerTask() {
         asyncThread = Thread.currentThread();
         List<Runnable> tasks = new ArrayList<>();
-        while (plugin.isEnabled() || !asyncQueue.isEmpty()) {
-            try {
-                // Empty the queue
-                Runnable task = asyncQueue.poll(50, TimeUnit.MILLISECONDS);
-                if (task == null) continue;
-                tasks.clear();
-                tasks.add(task);
-                asyncQueue.drainTo(tasks);
-                int backlog = tasks.size();
-                if (backlog > config.backlogThreshold) {
-                    plugin.getLogger()
-                        .warning("[SQL] Backlog exceeds threshold: "
-                                 + backlog + " > " + config.backlogThreshold);
-                }
-                for (Runnable run : tasks) {
-                    try {
-                        run.run();
-                    } catch (Exception e) {
-                        e.printStackTrace();
+        try {
+            while (plugin.isEnabled() || !asyncQueue.isEmpty()) {
+                try {
+                    // Empty the queue
+                    Runnable task = asyncQueue.poll(50, TimeUnit.MILLISECONDS);
+                    if (task == null) continue;
+                    tasks.clear();
+                    tasks.add(task);
+                    asyncQueue.drainTo(tasks);
+                    int backlog = tasks.size();
+                    if (backlog > config.backlogThreshold) {
+                        plugin.getLogger()
+                            .warning("[SQL] Backlog exceeds threshold: "
+                                     + backlog + " > " + config.backlogThreshold);
                     }
+                    for (Runnable run : tasks) {
+                        try {
+                            run.run();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                } catch (InterruptedException ie) {
+                    ie.printStackTrace();
+                    continue;
                 }
-            } catch (InterruptedException ie) {
-                ie.printStackTrace();
-                continue;
             }
+        } finally {
+            asyncSemaphore.release();
         }
     }
 
     public void waitForAsyncTask() {
-        if (asyncQueue == null) return;
-        int pending = asyncQueue.size();
-        if (pending == 0) return;
-        plugin.getLogger().info("[SQL] " + pending + " tasks pending");
-        while (true) {
-            if (asyncQueue.isEmpty()) return;
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException ie) {
-                ie.printStackTrace();
-            }
+        try {
+            asyncSemaphore.acquire();
+        } catch (InterruptedException ie) {
+            ie.printStackTrace();
         }
     }
 
