@@ -462,7 +462,7 @@ public final class SQLDatabase {
                                        + " while plugin is disabled!");
         }
         if (asyncWorker == null) {
-            synchronized(this) {
+            synchronized (this) {
                 if (asyncWorker == null) {
                     asyncQueue = new LinkedBlockingQueue<>();
                     asyncWorker = Bukkit.getScheduler().runTaskAsynchronously(plugin, this::asyncWorkerTask);

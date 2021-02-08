@@ -402,6 +402,16 @@ public final class SQLTable<E> {
             return this;
         }
 
+        public Finder openParen() {
+            sb.append("(");
+            return this;
+        }
+
+        public Finder closeParen() {
+            sb.append(")");
+            return this;
+        }
+
         public Finder idEq(int id) {
             if (idColumn == null) throw new IllegalArgumentException("idEq() requires id column!");
             sb.append(conj).append("`").append(idColumn.getColumnName()).append("` = ").append(id);
