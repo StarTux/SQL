@@ -403,6 +403,8 @@ public final class SQLTable<E> {
         }
 
         public Finder openParen() {
+            sb.append(conj);
+            conj = "";
             sb.append("(");
             return this;
         }
