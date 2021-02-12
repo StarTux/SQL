@@ -465,6 +465,19 @@ public final class SQLTable<E> {
             return compare(label, Comparison.LIKE, value);
         }
 
+        public Finder between(String label, Object v1, Object v2) {
+            if (v1 == null) throw new IllegalArgumentException("v1 cannot be null!");
+            if (v2 == null) throw new IllegalArgumentException("v2 cannot be null!");
+            SQLColumn column = getColumn(label);
+            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
+            String columnName = column.getColumnName();
+            sb.append(conj).append("`").append(columnName).append("`").append(" BETWEEN ? AND ?");
+            conj = DEFAULT_CONJ;
+            values.add(v1);
+            values.add(v2);
+            return this;
+        }
+
         public Finder in(String label, Collection<?> col) {
             SQLColumn column = getColumn(label);
             if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
