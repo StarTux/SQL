@@ -296,12 +296,18 @@ public final class SQLTable<E> {
         sb.append("UPDATE `").append(getTableName()).append("` SET");
         Iterator<SQLColumn> iter = columnList.iterator();
         SQLColumn column = iter.next();
-        sb.append(" `").append(column.getColumnName()).append("` = ?");
-        values.add(column.getValue(instance));
+        sb.append(" `").append(column.getColumnName()).append("` = ");
+        Object value = column.getValue(instance);
+        if (value == null) {
+            sb.append("NULL");
+        } else {
+            sb.append("?");
+            values.add(column.getValue(instance));
+        }
         while (iter.hasNext()) {
             column = iter.next();
             sb.append(", `").append(column.getColumnName()).append("` = ");
-            Object value = column.getValue(instance);
+            value = column.getValue(instance);
             if (value == null) {
                 sb.append("NULL");
             } else {
