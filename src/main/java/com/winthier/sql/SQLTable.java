@@ -300,8 +300,14 @@ public final class SQLTable<E> {
         values.add(column.getValue(instance));
         while (iter.hasNext()) {
             column = iter.next();
-            sb.append(", `").append(column.getColumnName()).append("` = ?");
-            values.add(column.getValue(instance));
+            sb.append(", `").append(column.getColumnName()).append("` = ");
+            Object value = column.getValue(instance);
+            if (value == null) {
+                sb.append("NULL");
+            } else {
+                sb.append("?");
+                values.add(value);
+            }
         }
         sb.append(" WHERE `").append(idColumn.getColumnName()).append("` = ?");
         values.add(idColumn.getValue(instance));
