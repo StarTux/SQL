@@ -20,6 +20,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import javax.persistence.PersistenceException;
+import javax.sql.rowset.CachedRowSet;
+import javax.sql.rowset.RowSetProvider;
 import lombok.Data;
 import lombok.Getter;
 import org.bukkit.Bukkit;
@@ -358,8 +360,7 @@ public final class SQLDatabase {
     // --- API: Raw statements
 
     public int executeUpdate(String sql) {
-        try {
-            Statement statement = getConnection().createStatement();
+        try (Statement statement = getConnection().createStatement()) {
             debugLog(sql);
             return statement.executeUpdate(sql);
         } catch (SQLException sqle) {
@@ -369,8 +370,7 @@ public final class SQLDatabase {
 
     public void executeUpdateAsync(String sql, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                try {
-                    Statement statement = getAsyncConnection().createStatement();
+                try (Statement statement = getAsyncConnection().createStatement()) {
                     debugLog(sql);
                     int result = statement.executeUpdate(sql);
                     if (callback != null) {
@@ -383,10 +383,13 @@ public final class SQLDatabase {
     }
 
     public ResultSet executeQuery(String sql) {
-        try {
-            Statement statement = getConnection().createStatement();
+        try (Statement statement = getConnection().createStatement()) {
             debugLog(sql);
-            return statement.executeQuery(sql);
+            try (ResultSet resultSet = statement.executeQuery(sql)) {
+                CachedRowSet cached = RowSetProvider.newFactory().createCachedRowSet();
+                cached.populate(resultSet);
+                return cached;
+            }
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
         }
@@ -394,11 +397,13 @@ public final class SQLDatabase {
 
     public void executeQueryAsync(String sql, Consumer<ResultSet> callback) {
         scheduleAsyncTask(() -> {
-                try {
-                    Statement statement = getAsyncConnection().createStatement();
+                try (Statement statement = getAsyncConnection().createStatement()) {
                     debugLog(sql);
-                    ResultSet result = statement.executeQuery(sql);
-                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                    try (ResultSet resultSet = statement.executeQuery(sql)) {
+                        CachedRowSet cached = RowSetProvider.newFactory().createCachedRowSet();
+                        cached.populate(resultSet);
+                        Bukkit.getScheduler().runTask(plugin, () -> callback.accept(cached));
+                    }
                 } catch (SQLException sqle) {
                     throw new PersistenceException(sqle);
                 }
@@ -518,6 +523,23 @@ public final class SQLDatabase {
                 Thread.sleep(50);
             } catch (InterruptedException ie) {
                 ie.printStackTrace();
+            }
+        }
+    }
+
+    public void close() {
+        if (primaryConnection != null) {
+            try {
+                primaryConnection.close();
+            } catch (SQLException pe) {
+                pe.printStackTrace();
+            }
+        }
+        if (asyncConnection != null) {
+            try {
+                asyncConnection.close();
+            } catch (SQLException pe) {
+                pe.printStackTrace();
             }
         }
     }
