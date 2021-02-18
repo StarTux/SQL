@@ -82,7 +82,11 @@ final class SQLColumn {
         case INT:
             return "int(" + precision + ")";
         case STRING:
-            if (length > 1024) {
+            if (length > 16777215) {
+                return "longtext";
+            } else if (length > 65535) {
+                return "mediumtext";
+            } else if (length > 1024) {
                 return "text";
             } else {
                 return "varchar(" + length + ")";
