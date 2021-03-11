@@ -17,7 +17,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Getter
-final class SQLColumn {
+public final class SQLColumn {
     private final SQLTable table;
     private final Field field;
     private String columnName;

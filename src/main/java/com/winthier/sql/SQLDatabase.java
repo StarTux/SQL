@@ -548,4 +548,10 @@ public final class SQLDatabase {
         if (asyncQueue == null) return 0;
         return asyncQueue.size();
     }
+
+    public <E> SQLUpdater<E> update(Class<E> clazz) {
+        SQLTable table = getTable(clazz);
+        if (table == null) throw new IllegalStateException("Table not found: " + clazz);
+        return new SQLUpdater(this, table);
+    }
 }

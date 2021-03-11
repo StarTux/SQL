@@ -112,7 +112,7 @@ public final class SQLTable<E> {
         }
     }
 
-    SQLColumn getColumn(String label) {
+    public SQLColumn getColumn(String label) {
         for (SQLColumn column: columns) {
             if (column.getColumnName().equals(label)) return column;
             if (column.getField().getName().equals(label)) return column;
@@ -318,7 +318,7 @@ public final class SQLTable<E> {
         sb.append(" WHERE `").append(idColumn.getColumnName()).append("` = ?");
         values.add(idColumn.getValue(instance));
         // Build the statement
-        try (PreparedStatement statement = connection.prepareStatement(sb.toString(), Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement statement = connection.prepareStatement(sb.toString())) {
             SQLUtil.formatStatement(statement, values);
             database.debugLog(statement);
             int ret = statement.executeUpdate();
