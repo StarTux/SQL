@@ -295,25 +295,13 @@ public final class SQLTable<E> {
         StringBuilder sb = new StringBuilder();
         sb.append("UPDATE `").append(getTableName()).append("` SET");
         Iterator<SQLColumn> iter = columnList.iterator();
+        sb.append(" ");
         SQLColumn column = iter.next();
-        sb.append(" `").append(column.getColumnName()).append("` = ");
-        Object value = column.getValue(instance);
-        if (value == null) {
-            sb.append("NULL");
-        } else {
-            sb.append("?");
-            values.add(column.getValue(instance));
-        }
+        sb.append(column.createSetFragment(column.getValue(instance), values));
         while (iter.hasNext()) {
             column = iter.next();
-            sb.append(", `").append(column.getColumnName()).append("` = ");
-            value = column.getValue(instance);
-            if (value == null) {
-                sb.append("NULL");
-            } else {
-                sb.append("?");
-                values.add(value);
-            }
+            sb.append(", ");
+            sb.append(column.createSetFragment(column.getValue(instance), values));
         }
         sb.append(" WHERE `").append(idColumn.getColumnName()).append("` = ?");
         values.add(idColumn.getValue(instance));

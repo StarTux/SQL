@@ -219,6 +219,33 @@ public final class SQLColumn {
         }
     }
 
+    /**
+     * Note that this wants the value instead of the instance, unlike the above!
+     */
+    String createSetFragment(Object value, List<Object> values) {
+        if (value == null) {
+            return "`" + columnName + "` = NULL";
+        } else {
+            if (type == SQLType.REFERENCE) {
+                SQLTable refTable = table.getDatabase().getTable(field.getType());
+                if (refTable == null) {
+                    throw new EntityNotFoundException("Table not registered: " + field.getType());
+                }
+                if (refTable.getIdColumn() == null) {
+                    throw new NullPointerException("Referenced table has no id column: " + value.getClass().getName());
+                }
+                Object refId = refTable.getIdColumn().getValue(value);
+                if (refId == null) throw new NullPointerException("Referenced table has no id: " + value.getClass().getName() + ": " + value);
+                values.add(refId);
+            } else if (type == SQLType.ENUM) {
+                values.add(((Enum) value).ordinal());
+            } else {
+                values.add(value);
+            }
+            return "`" + columnName + "` = ?";
+        }
+    }
+
     Object getValue(Object inst) {
         try {
             return getterMethod.invoke(inst);
