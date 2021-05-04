@@ -273,6 +273,7 @@ public final class SQLTable<E> {
             }
             return ret;
         } catch (SQLException sqle) {
+            database.getPlugin().getLogger().warning("Error saving " + tableName);
             throw new PersistenceException(sqle);
         }
     }

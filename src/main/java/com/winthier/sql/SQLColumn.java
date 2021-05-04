@@ -152,7 +152,8 @@ public final class SQLColumn {
                         Object arr = method.invoke(null);
                         value = Array.get(arr, num);
                     } catch (Exception e) {
-                        // TODO better error handling!
+                        table.getDatabase().getPlugin().getLogger()
+                            .warning("Error loading enum from " + table.getTableName() + "." + columnName);
                         e.printStackTrace();
                         value = null;
                     }
