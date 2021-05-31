@@ -1,6 +1,8 @@
 package com.winthier.sql;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -33,6 +35,7 @@ public final class SQLTable<E> {
     private SQLColumn idColumn;
     private final List<Key> keys = new ArrayList<>();
     private final List<SQLColumn> columns = new ArrayList<>();
+    private final Constructor<E> ctor;
 
     @Value
     static class Key {
@@ -48,6 +51,11 @@ public final class SQLTable<E> {
     SQLTable(final Class<E> clazz, final SQLDatabase database) {
         this.clazz = clazz;
         this.database = database;
+        try {
+            this.ctor = clazz.getConstructor();
+        } catch (NoSuchMethodException nsme) {
+            throw new PersistenceException(nsme);
+        }
         Table tableAnnotation = clazz.getAnnotation(Table.class);
         String tablePrefix = database == null ? "" : database.getConfig().getPrefix();
         if (tableAnnotation != null) {
@@ -159,20 +167,23 @@ public final class SQLTable<E> {
     }
 
     E createInstance(Connection connection, ResultSet result) {
+        E row;
         try {
-            E row = clazz.newInstance();
-            for (SQLColumn column: columns) {
-                column.load(connection, row, result);
-            }
-            if (row instanceof SQLInterface) {
-                ((SQLInterface) row).onLoad(result);
-            }
-            return row;
+            row = ctor.newInstance();
         } catch (InstantiationException ie) {
             throw new PersistenceException(ie);
         } catch (IllegalAccessException iae) {
             throw new PersistenceException(iae);
+        } catch (InvocationTargetException ite) {
+            throw new PersistenceException(ite);
         }
+        for (SQLColumn column: columns) {
+            column.load(connection, row, result);
+        }
+        if (row instanceof SQLInterface) {
+            ((SQLInterface) row).onLoad(result);
+        }
+        return row;
     }
 
     int save(Connection connection, Collection<E> instances, boolean doIgnore, boolean doUpdate, Set<String> columnNames) {

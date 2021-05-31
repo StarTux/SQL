@@ -550,8 +550,8 @@ public final class SQLDatabase {
     }
 
     public <E> SQLUpdater<E> update(Class<E> clazz) {
-        SQLTable table = getTable(clazz);
+        SQLTable<E> table = getTable(clazz);
         if (table == null) throw new IllegalStateException("Table not found: " + clazz);
-        return new SQLUpdater(this, table);
+        return new SQLUpdater<E>(this, table);
     }
 }
