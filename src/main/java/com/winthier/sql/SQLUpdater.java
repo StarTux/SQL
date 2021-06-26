@@ -147,47 +147,47 @@ public final class SQLUpdater<E> {
             });
     }
 
-    public SQLUpdater row(final E theInstance) {
+    public SQLUpdater<E> row(final E theInstance) {
         this.instance = theInstance;
         return this;
     }
 
-    public SQLUpdater addValue(final String key, final Object value, final Operation operation) {
+    public SQLUpdater<E> addValue(final String key, final Object value, final Operation operation) {
         SQLColumn column = table.getColumn(key);
         if (column == null) throw new IllegalStateException("Column not found: " + key);
         valueList.add(new NewValue(column, operation, value));
         return this;
     }
 
-    public SQLUpdater set(final String key, final Object value) {
+    public SQLUpdater<E> set(final String key, final Object value) {
         return addValue(key, value, Operation.SET);
     }
 
-    public SQLUpdater atomic(final String key, final Object value) {
+    public SQLUpdater<E> atomic(final String key, final Object value) {
         return addValue(key, value, Operation.SET_ATOMIC);
     }
 
-    public SQLUpdater add(final String key, final Object value) {
+    public SQLUpdater<E> add(final String key, final Object value) {
         if (!(value instanceof Number)) throw new IllegalArgumentException("add: number expected!");
         return addValue(key, value, Operation.ADD);
     }
 
-    public SQLUpdater subtract(final String key, final Object value) {
+    public SQLUpdater<E> subtract(final String key, final Object value) {
         if (!(value instanceof Number)) throw new IllegalArgumentException("subtract: number expected!");
         return addValue(key, value, Operation.SUBTRACT);
     }
 
-    public SQLUpdater multiply(final String key, final Object value) {
+    public SQLUpdater<E> multiply(final String key, final Object value) {
         if (!(value instanceof Number)) throw new IllegalArgumentException("multiply: number expected!");
         return addValue(key, value, Operation.MULTIPLY);
     }
 
-    public SQLUpdater divide(final String key, final Object value) {
+    public SQLUpdater<E> divide(final String key, final Object value) {
         if (!(value instanceof Number)) throw new IllegalArgumentException("divide: number expected!");
         return addValue(key, value, Operation.DIVIDE);
     }
 
-    public SQLUpdater update(final String... keys) {
+    public SQLUpdater<E> update(final String... keys) {
         for (String key : keys) {
             addValue(key, null, Operation.UPDATE);
         }
@@ -199,7 +199,7 @@ public final class SQLUpdater<E> {
         return conditionList;
     }
 
-    public SQLUpdater where(Consumer<SQLConditionList> consumer) {
+    public SQLUpdater<E> where(Consumer<SQLConditionList> consumer) {
         consumer.accept(where());
         return this;
     }
