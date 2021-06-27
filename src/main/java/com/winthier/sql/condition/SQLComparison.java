@@ -106,4 +106,9 @@ public final class SQLComparison implements SQLCondition {
     public static SQLComparison eq(SQLColumn column, Object value) {
         return new SQLComparison(column, Comparator.EQ, value, null);
     }
+
+    @Override
+    public String toString() {
+        return comparator + "(" + column.getColumnName() + ", " + value + ", " + rvalue + ")";
+    }
 }

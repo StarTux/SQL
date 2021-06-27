@@ -89,6 +89,7 @@ public final class SQLConditionList implements SQLCondition {
         SQLColumn column = table.getColumn(label);
         if (column == null) throw new IllegalStateException("Column not found: " + label);
         SQLComparison comparison = new SQLComparison(column, comparator, value, rvalue);
+        list.add(comparison);
         return this;
     }
 
@@ -97,8 +98,18 @@ public final class SQLConditionList implements SQLCondition {
         return this;
     }
 
+    public SQLConditionList isNull(String label) {
+        compare(label, SQLComparison.Comparator.EQ, null, null);
+        return this;
+    }
+
     public SQLConditionList neq(String label, Object value) {
         compare(label, SQLComparison.Comparator.NEQ, value, null);
+        return this;
+    }
+
+    public SQLConditionList isNotNull(String label) {
+        compare(label, SQLComparison.Comparator.NEQ, null, null);
         return this;
     }
 
@@ -130,5 +141,14 @@ public final class SQLConditionList implements SQLCondition {
     public SQLConditionList between(String label, Object value, Object rvalue) {
         compare(label, SQLComparison.Comparator.BETWEEN, value, rvalue);
         return this;
+    }
+
+    @Override
+    public String toString() {
+        List<String> strings = new ArrayList(list.size());
+        for (SQLCondition it : list) {
+            strings.add(it.toString());
+        }
+        return conjunction + "(" + String.join(", ", strings) + ")";
     }
 }

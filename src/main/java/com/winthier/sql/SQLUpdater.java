@@ -59,7 +59,7 @@ public final class SQLUpdater<E> {
         }
     }
 
-    public boolean sync() {
+    public int sync() {
         if (instance != null && table.getIdColumn() == null) {
             throw new IllegalStateException("No id column: " + table.getTableName());
         }
@@ -113,7 +113,7 @@ public final class SQLUpdater<E> {
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
         }
-        if (ret <= 0) return false;
+        if (ret <= 0) return ret;
         if (instance != null) {
             for (NewValue newValue : valueList) {
                 switch (newValue.operation) {
@@ -135,12 +135,12 @@ public final class SQLUpdater<E> {
                 }
             }
         }
-        return true;
+        return ret;
     }
 
-    public void async(Consumer<Boolean> callback) {
+    public void async(Consumer<Integer> callback) {
         database.scheduleAsyncTask(() -> {
-                boolean res = sync();
+                int res = sync();
                 if (callback != null) {
                     callback.accept(res);
                 }
