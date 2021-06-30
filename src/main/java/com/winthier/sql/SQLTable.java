@@ -266,7 +266,13 @@ public final class SQLTable<E> {
         try (PreparedStatement statement = connection.prepareStatement(sb.toString(), Statement.RETURN_GENERATED_KEYS)) {
             SQLUtil.formatStatement(statement, values);
             database.debugLog(statement);
-            int ret = statement.executeUpdate();
+            int ret;
+            try {
+                ret = statement.executeUpdate();
+            } catch (SQLException sqle) {
+                database.getPlugin().getLogger().warning("Error saving " + tableName + ": " + statement);
+                throw new PersistenceException(sqle);
+            }
             if (idColumn != null) {
                 ResultSet keySet = statement.getGeneratedKeys();
                 for (Object inst: instances) {
@@ -284,7 +290,6 @@ public final class SQLTable<E> {
             }
             return ret;
         } catch (SQLException sqle) {
-            database.getPlugin().getLogger().warning("Error saving " + tableName);
             throw new PersistenceException(sqle);
         }
     }
