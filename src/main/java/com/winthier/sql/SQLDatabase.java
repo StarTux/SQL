@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import javax.persistence.PersistenceException;
@@ -43,6 +44,8 @@ public final class SQLDatabase {
     private LinkedBlockingQueue<Runnable> asyncQueue;
     private BukkitTask asyncWorker = null;
     private Thread asyncThread = null;
+    private Semaphore asyncSemaphore = new Semaphore(1);
+    private boolean doStop = false;
 
     // --- Constructors
 
@@ -427,14 +430,11 @@ public final class SQLDatabase {
     public Connection getPrimaryConnection() {
         try {
             if (primaryConnection == null || !primaryConnection.isValid(1)) {
-                Class.forName("com.mysql.jdbc.Driver");
                 primaryConnection = DriverManager
                     .getConnection(config.getUrl(), config.getUser(), config.getPassword());
             }
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
-        } catch (ClassNotFoundException cnfe) {
-            throw new PersistenceException(cnfe);
         }
         return primaryConnection;
     }
@@ -442,14 +442,11 @@ public final class SQLDatabase {
     public Connection getAsyncConnection() {
         try {
             if (asyncConnection == null || !asyncConnection.isValid(1)) {
-                Class.forName("com.mysql.jdbc.Driver");
                 asyncConnection = DriverManager
                     .getConnection(config.getUrl(), config.getUser(), config.getPassword());
             }
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
-        } catch (ClassNotFoundException cnfe) {
-            throw new PersistenceException(cnfe);
         }
         return asyncConnection;
     }
@@ -482,9 +479,14 @@ public final class SQLDatabase {
     }
 
     private void asyncWorkerTask() {
+        if (!asyncSemaphore.tryAcquire()) {
+            // Should only happen with extremely poor timing
+            plugin.getLogger().warning("Async worker task creation failed!");
+            return;
+        }
         asyncThread = Thread.currentThread();
         List<Runnable> tasks = new ArrayList<>();
-        while (plugin.isEnabled() || !asyncQueue.isEmpty()) {
+        while (!doStop && (plugin.isEnabled() || !asyncQueue.isEmpty())) {
             try {
                 // Empty the queue
                 Runnable task = asyncQueue.poll(50, TimeUnit.MILLISECONDS);
@@ -510,6 +512,7 @@ public final class SQLDatabase {
                 continue;
             }
         }
+        asyncSemaphore.release();
     }
 
     public void waitForAsyncTask() {
@@ -517,12 +520,16 @@ public final class SQLDatabase {
         int pending = asyncQueue.size();
         if (pending == 0) return;
         plugin.getLogger().info("[SQL] " + pending + " tasks pending");
-        while (true) {
-            if (asyncQueue.isEmpty()) return;
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException ie) {
-                ie.printStackTrace();
+        asyncSemaphore.acquireUninterruptibly();
+        while (!asyncQueue.isEmpty()) {
+            List<Runnable> list = new ArrayList<>(asyncQueue.size());
+            asyncQueue.drainTo(list);
+            for (Runnable run : list) {
+                try {
+                    run.run();
+                } catch (Throwable t) {
+                    t.printStackTrace();
+                }
             }
         }
     }
