@@ -4,4 +4,3 @@ version: '0.1'
 description: SQL library for Spigot. Replacement for Ebean.
 author: StarTux
 website: 'https://github.com/StarTux/SQL'
-api-version: '1.17'
