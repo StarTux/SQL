@@ -680,6 +680,10 @@ public final class SQLTable<E> {
         }
 
         PreparedStatement getDeleteStatement(Connection connection) throws SQLException {
+            if (limit > 0) {
+                sb.append(" LIMIT " + limit);
+                if (offset > -1) sb.append(" OFFSET " + offset);
+            }
             String sql = "DELETE FROM `" + getTableName() + "`" + sb.toString();
             PreparedStatement statement = connection.prepareStatement(sql);
             SQLUtil.formatStatement(statement, values);
