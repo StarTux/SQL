@@ -141,6 +141,9 @@ public final class SQLDatabase {
     public <E> SQLTable registerTable(Class<E> clazz) {
         SQLTable<E> table = new SQLTable<>(clazz, this);
         tables.put(clazz, table);
+        if (!SQLRow.class.isAssignableFrom(clazz)) {
+            plugin.getLogger().warning("Does not implement SQLRow: " + clazz.getName());
+        }
         return table;
     }
 

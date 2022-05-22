@@ -145,7 +145,7 @@ public final class SQLConditionList implements SQLCondition {
 
     @Override
     public String toString() {
-        List<String> strings = new ArrayList(list.size());
+        List<String> strings = new ArrayList<>(list.size());
         for (SQLCondition it : list) {
             strings.add(it.toString());
         }
