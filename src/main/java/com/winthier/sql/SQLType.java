@@ -8,6 +8,7 @@ import javax.persistence.OneToOne;
 
 enum SQLType {
     INT,
+    LONG,
     STRING,
     UUID,
     FLOAT,
@@ -21,6 +22,8 @@ enum SQLType {
         Class<?> fieldType = field.getType();
         if (fieldType == Integer.class || fieldType == int.class) {
             return SQLType.INT;
+        } else if (fieldType == Long.class || fieldType == long.class) {
+            return SQLType.LONG;
         } else if (fieldType == String.class) {
             return SQLType.STRING;
         } else if (fieldType == UUID.class) {

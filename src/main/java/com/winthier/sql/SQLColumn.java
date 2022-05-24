@@ -41,12 +41,12 @@ public final class SQLColumn {
             this.columnDefinition = columnAnnotation.columnDefinition();
             this.nullable = columnAnnotation.nullable() && !id;
             this.length = columnAnnotation.length();
-            this.precision = columnAnnotation.precision() > 0 ? columnAnnotation.precision() : 11;
+            this.precision = columnAnnotation.precision();
             this.unique = columnAnnotation.unique();
         } else {
             this.nullable = !id;
             this.length = 255;
-            this.precision = 11;
+            this.precision = 0;
             this.unique = this.id;
         }
         type = SQLType.of(field);
@@ -80,7 +80,13 @@ public final class SQLColumn {
     private String getTypeDefinition() {
         switch (type) {
         case INT:
-            return "int(" + precision + ")";
+            return precision > 0
+                ? "int(" + precision + ")"
+                : "int";
+        case LONG:
+            return precision > 0
+                ? "bigint(" + precision + ")"
+                : "bigint";
         case STRING:
             if (length > 16777215) {
                 return "longtext";
@@ -100,11 +106,11 @@ public final class SQLColumn {
         case DATE:
             return "datetime";
         case BOOL:
-            return "tinyint(1)";
+            return "tinyint";
         case ENUM:
-            return "int(11)";
+            return "int";
         case REFERENCE:
-            return "int(11)";
+            return "int";
         default:
             throw new IllegalArgumentException("Type definition not implemented: " + type);
         }
