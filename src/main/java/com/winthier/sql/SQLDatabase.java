@@ -22,7 +22,6 @@ import java.util.function.Consumer;
 import javax.persistence.PersistenceException;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
-import lombok.Data;
 import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
@@ -58,9 +57,9 @@ public final class SQLDatabase {
         config.setPassword("password");
         Plugin sqlPlugin = Bukkit.getPluginManager().getPlugin("SQL");
         if (sqlPlugin != null) {
-            config.load(sqlPlugin.getConfig().getConfigurationSection("database"));
+            config.load(plugin.getName(), sqlPlugin.getConfig().getConfigurationSection("database"));
         }
-        config.load(getPluginDatabaseConfig());
+        config.load(plugin.getName(), getPluginDatabaseConfig());
         debug = config.isDebug();
         debugLog(config);
     }
@@ -80,50 +79,6 @@ public final class SQLDatabase {
     }
 
     // --- Utility: Configuration
-
-    @Data
-    final class Config {
-        private String host = "";
-        private String port = "";
-        private String database = "";
-        private String prefix = "";
-        private String user = "";
-        private String password = "";
-        private boolean debug;
-        int backlogThreshold = 1000;
-
-        void load(ConfigurationSection c) {
-            final String name = plugin.getName();
-            final String lowerName = SQLUtil.camelToLowerCase(name);
-            String cHost = c.getString("host");
-            String cPort = c.getString("port");
-            String cDatabase = c.getString("database");
-            String cPrefix = c.getString("prefix");
-            String cUser = c.getString("user");
-            String cPassword = c.getString("password");
-            if (cHost != null && !cHost.isEmpty()) host = cHost;
-            if (cPort != null && !cPort.isEmpty()) port = cPort;
-            if (cDatabase != null && !cDatabase.isEmpty()) {
-                database = cDatabase.replace("{NAME}", name);
-            }
-            if (cPrefix != null) prefix = cPrefix.replace("{NAME}", lowerName);
-            if (cUser != null && !cUser.isEmpty()) user = cUser;
-            if (cPassword != null && !cPassword.isEmpty()) password = cPassword;
-            if (c.isSet("debug")) debug = c.getBoolean("debug");
-            backlogThreshold = c.getInt("backlogThreshold", backlogThreshold);
-        }
-
-        String getUrl() {
-            return "jdbc:mysql://" + host + ":" + port + "/" + database;
-        }
-
-        @Override
-        public String toString() {
-            return String
-                .format("Config(host=%s port=%s database=%s prefix=%s user=%s password=%s)",
-                        host, port, database, prefix, user, password);
-        }
-    }
 
     ConfigurationSection getPluginDatabaseConfig() {
         File file = new File(plugin.getDataFolder(), SQL_CONFIG_FILE);
@@ -145,7 +100,7 @@ public final class SQLDatabase {
         return table;
     }
 
-    public void registerTables(List<Class<? extends SQLRow>> classes) {
+    public void registerTables(Collection<Class<? extends SQLRow>> classes) {
         for (Class<? extends SQLRow> clazz : classes) {
             registerTable(clazz);
         }
@@ -154,6 +109,9 @@ public final class SQLDatabase {
     @Deprecated
     public void registerTables(Class<?>... classes) {
         for (Class<?> it : classes) {
+            if (!SQLRow.class.isAssignableFrom(it)) {
+                throw new RuntimeException(it.getName() + " does not implement SQLRow!");
+            }
             @SuppressWarnings("unchecked") Class<? extends SQLRow> clazz = (Class<? extends SQLRow>) it;
             registerTable(clazz);
         }
@@ -206,20 +164,16 @@ public final class SQLDatabase {
     /**
      * Internal save helper.
      */
-    private <E extends SQLRow> int save(Connection connection, E instance,
-                                        boolean doIgnore, boolean doUpdate,
-                                        Set<String> columnNames) {
+    private <E extends SQLRow> int save(Connection connection, E instance, boolean doIgnore, boolean doUpdate, Set<String> columnNames) {
         SQLTable<E> table = getTable(instance);
         return table.save(connection, List.of(instance), doIgnore, doUpdate, columnNames);
     }
 
-    private <E extends SQLRow> int save(Connection connection, Collection<E> collection,
-                                        boolean doIgnore, boolean doUpdate,
-                                        Set<String> columnNames) {
-            if (collection.isEmpty()) return 0;
-            E any = collection.iterator().next();
-            SQLTable<E> table = getTable(any);
-            return table.save(connection, collection, doIgnore, doUpdate, columnNames);
+    private <E extends SQLRow> int save(Connection connection, Collection<E> collection, boolean doIgnore, boolean doUpdate, Set<String> columnNames) {
+        if (collection.isEmpty()) return 0;
+        E any = collection.iterator().next();
+        SQLTable<E> table = getTable(any);
+        return table.save(connection, collection, doIgnore, doUpdate, columnNames);
     }
 
     private <E extends SQLRow> int update(Connection connection, E instance, Set<String> columnNames) {
@@ -231,6 +185,10 @@ public final class SQLDatabase {
         return save(getConnection(), instance, true, true, null);
     }
 
+    public <E extends SQLRow> int saveIgnore(Collection<E> instances) {
+        return save(getConnection(), instances, true, true, null);
+    }
+
     public <E extends SQLRow> void saveIgnoreAsync(E instance, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), instance, true, true, null);
@@ -240,8 +198,21 @@ public final class SQLDatabase {
             });
     }
 
+    public <E extends SQLRow> void saveIgnoreAsync(Collection<E> instances, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), instances, true, true, null);
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
     public <E extends SQLRow> int save(E instance) {
         return save(getConnection(), instance, false, true, null);
+    }
+
+    public <E extends SQLRow> int save(Collection<E> instances) {
+        return save(getConnection(), instances, false, true, null);
     }
 
     public <E extends SQLRow> void saveAsync(E instance, Consumer<Integer> callback) {
@@ -253,23 +224,43 @@ public final class SQLDatabase {
             });
     }
 
-    public <E extends SQLRow> int save(E instance, String... fields) {
-        return save(getConnection(), instance, false, true,
-                    new LinkedHashSet<>(List.of(fields)));
-    }
-
-    public <E extends SQLRow> void saveAsync(E instance, Consumer<Integer> callback, String... fields) {
+    public <E extends SQLRow> void saveAsync(Collection<E> instances, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), instance, false, true,
-                                  new LinkedHashSet<>(List.of(fields)));
+                int result = save(getAsyncConnection(), instances, false, true, null);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
             });
     }
 
-    public <E extends SQLRow> int save(E instance, Set<String> fields) {
-        return save(getConnection(), instance, false, true, fields);
+    public <E extends SQLRow> int save(E instance, String... fields) {
+        return save(getConnection(), instance, false, true, Set.of(fields));
+    }
+
+    public <E extends SQLRow> int save(Collection<E> instances, String... fields) {
+        return save(getConnection(), instances, false, true, Set.of(fields));
+    }
+
+    public <E extends SQLRow> int save(Collection<E> instances, Set<String> fields) {
+        return save(getConnection(), instances, false, true, fields);
+    }
+
+    public <E extends SQLRow> void saveAsync(E instance, Consumer<Integer> callback, String... fields) {
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), instance, false, true, Set.of(fields));
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
+    public <E extends SQLRow> void saveAsync(Collection<E> instances, Consumer<Integer> callback, String... fields) {
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), instances, false, true, Set.of(fields));
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
     }
 
     public <E extends SQLRow> void saveAsync(E instance, Set<String> fields, Consumer<Integer> callback) {
@@ -281,9 +272,27 @@ public final class SQLDatabase {
             });
     }
 
+    public <E extends SQLRow> void saveAsync(Collection<E> instances, Set<String> fields, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), instances, false, true, fields);
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
     public <E extends SQLRow> void saveIgnoreAsync(E instance, Set<String> fields, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), instance, true, true, fields);
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
+    public <E extends SQLRow> void saveIgnoreAsync(Collection<E> instances, Set<String> fields, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), instances, true, true, fields);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
@@ -307,13 +316,30 @@ public final class SQLDatabase {
         return save(getConnection(), instance, false, false, null);
     }
 
+    public <E extends SQLRow> int insert(Collection<E> instances) {
+        return save(getConnection(), instances, false, false, null);
+    }
+
     public <E extends SQLRow> int insertIgnore(E instance) {
         return save(getConnection(), instance, true, false, null);
+    }
+
+    public <E extends SQLRow> int insertIgnore(Collection<E> instances) {
+        return save(getConnection(), instances, true, false, null);
     }
 
     public <E extends SQLRow> void insertAsync(E instance, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = save(getAsyncConnection(), instance, false, false, null);
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
+    public <E extends SQLRow> void insertAsync(Collection<E> instances, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), instances, false, false, null);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
@@ -329,6 +355,15 @@ public final class SQLDatabase {
             });
     }
 
+    public <E extends SQLRow> void insertIgnoreAsync(Collection<E> instances, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = save(getAsyncConnection(), instances, true, false, null);
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
     // --- API: Delete
 
     private <E extends SQLRow> int delete(Connection connection, E instance) {
@@ -337,19 +372,32 @@ public final class SQLDatabase {
     }
 
     private <E extends SQLRow> int delete(Connection connection, Collection<E> collection) {
-            if (collection.isEmpty()) return 0;
-            E any = collection.iterator().next();
-            SQLTable<E> table = getTable(any);
-            return table.delete(connection, collection);
+        if (collection.isEmpty()) return 0;
+        E any = collection.iterator().next();
+        SQLTable<E> table = getTable(any);
+        return table.delete(connection, collection);
     }
 
     public <E extends SQLRow> int delete(E instance) {
         return delete(getConnection(), instance);
     }
 
+    public <E extends SQLRow> int delete(Collection<E> instances) {
+        return delete(getConnection(), instances);
+    }
+
     public <E extends SQLRow> void deleteAsync(E instance, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
                 int result = delete(getAsyncConnection(), instance);
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
+    public <E extends SQLRow> void deleteAsync(Collection<E> instances, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = delete(getAsyncConnection(), instances);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
