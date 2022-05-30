@@ -3,7 +3,6 @@ package com.winthier.sql;
 import java.util.Date;
 import java.util.Random;
 import javax.persistence.Column;
-import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Index;
 import javax.persistence.OneToOne;
@@ -12,12 +11,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-@Entity
 @Table(name = "foo", indexes = @Index(columnList = "time,bar"))
-@Getter
-@Setter
-@NoArgsConstructor
-public final class SQLFoo {
+@Getter @Setter @NoArgsConstructor
+public final class SQLFoo implements SQLRow {
     @Id private Integer id;
     @Column(nullable = false)
     private Date time;

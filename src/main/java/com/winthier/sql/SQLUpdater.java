@@ -12,7 +12,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
-public final class SQLUpdater<E> {
+public final class SQLUpdater<E extends SQLRow> {
     private final SQLDatabase database;
     private final SQLTable<E> table;
     private E instance;

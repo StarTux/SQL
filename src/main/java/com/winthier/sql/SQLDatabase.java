@@ -9,7 +9,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -35,7 +34,7 @@ import org.bukkit.scheduler.BukkitTask;
 @Getter
 public final class SQLDatabase {
     private final JavaPlugin plugin;
-    private final Map<Class<?>, SQLTable<?>> tables = new HashMap<>();
+    private final Map<Class<? extends SQLRow>, SQLTable<? extends SQLRow>> tables = new HashMap<>();
     private static final String SQL_CONFIG_FILE = "sql.yml";
     private final boolean debug;
     private final Config config;
@@ -74,7 +73,9 @@ public final class SQLDatabase {
 
     public SQLDatabase async() {
         SQLDatabase cpy = new SQLDatabase(this);
-        for (Class<?> clz: tables.keySet()) cpy.registerTable(clz);
+        for (Class<? extends SQLRow> clz : tables.keySet()) {
+            cpy.registerTable(clz);
+        }
         return cpy;
     }
 
@@ -138,30 +139,48 @@ public final class SQLDatabase {
 
     // --- API: Tables
 
-    public <E> SQLTable registerTable(Class<E> clazz) {
+    public <E extends SQLRow> SQLTable registerTable(Class<E> clazz) {
         SQLTable<E> table = new SQLTable<>(clazz, this);
         tables.put(clazz, table);
-        if (!SQLRow.class.isAssignableFrom(clazz)) {
-            plugin.getLogger().warning("Does not implement SQLRow: " + clazz.getName());
-        }
         return table;
     }
 
-    public void registerTables(Class<?>... clazzes) {
-        for (Class<?> clazz: clazzes) {
+    public void registerTables(List<Class<? extends SQLRow>> classes) {
+        for (Class<? extends SQLRow> clazz : classes) {
             registerTable(clazz);
         }
     }
 
-    public <E> SQLTable<E> getTable(Class<E> clazz) {
-        @SuppressWarnings("unchecked")
-            SQLTable<E> result = (SQLTable<E>) tables.get(clazz);
+    @Deprecated
+    public void registerTables(Class<?>... classes) {
+        for (Class<?> it : classes) {
+            @SuppressWarnings("unchecked") Class<? extends SQLRow> clazz = (Class<? extends SQLRow>) it;
+            registerTable(clazz);
+        }
+    }
+
+    public SQLTable<? extends SQLRow> findTable(Class<?> clazz) {
+        SQLTable<? extends SQLRow> result = tables.get(clazz);
+        if (result == null) throw new IllegalStateException("Table not found: " + clazz.getName());
+        return result;
+    }
+
+    public <E extends SQLRow> SQLTable<E> getTable(Class<E> clazz) {
+        @SuppressWarnings("unchecked") SQLTable<E> result = (SQLTable<E>) tables.get(clazz);
+        if (result == null) throw new IllegalStateException("Table not found: " + clazz.getName());
+        return result;
+    }
+
+    public <E extends SQLRow> SQLTable<E> getTable(E instance) {
+        @SuppressWarnings("unchecked") Class<E> clazz = (Class<E>) instance.getClass();
+        @SuppressWarnings("unchecked") SQLTable<E> result = (SQLTable<E>) tables.get(clazz);
+        if (result == null) throw new IllegalStateException("Table not found: " + clazz.getName());
         return result;
     }
 
     public boolean createAllTables() {
         try {
-            for (SQLTable table: tables.values()) {
+            for (SQLTable<? extends SQLRow> table : tables.values()) {
                 String sql = table.getCreateTableStatement();
                 executeUpdate(sql);
             }
@@ -174,11 +193,11 @@ public final class SQLDatabase {
 
     // --- API: Find and update
 
-    public <E> SQLTable<E>.Finder find(Class<E> clazz) {
+    public <E extends SQLRow> SQLTable<E>.Finder find(Class<E> clazz) {
         return getTable(clazz).find();
     }
 
-    public <E> E find(Class<E> clazz, int id) {
+    public <E extends SQLRow> E find(Class<E> clazz, int id) {
         return getTable(clazz).find(getConnection(), id);
     }
 
@@ -187,137 +206,123 @@ public final class SQLDatabase {
     /**
      * Internal save helper.
      */
-    private int save(Connection connection, Object inst,
-                     boolean doIgnore, boolean doUpdate,
-                     Set<String> columnNames) {
-        if (inst instanceof Collection) {
-            @SuppressWarnings("unchecked")
-                Collection<Object> collection = (Collection<Object>) inst;
+    private <E extends SQLRow> int save(Connection connection, E instance,
+                                        boolean doIgnore, boolean doUpdate,
+                                        Set<String> columnNames) {
+        SQLTable<E> table = getTable(instance);
+        return table.save(connection, List.of(instance), doIgnore, doUpdate, columnNames);
+    }
+
+    private <E extends SQLRow> int save(Connection connection, Collection<E> collection,
+                                        boolean doIgnore, boolean doUpdate,
+                                        Set<String> columnNames) {
             if (collection.isEmpty()) return 0;
-            Object any = collection.iterator().next().getClass();
-            @SuppressWarnings("unchecked")
-                SQLTable<Object> table = (SQLTable<Object>) tables.get(any);
-            if (table == null) {
-                throw new PersistenceException("Table not found for object of class "
-                                               + any.getClass().getName());
-            }
+            E any = collection.iterator().next();
+            SQLTable<E> table = getTable(any);
             return table.save(connection, collection, doIgnore, doUpdate, columnNames);
-        } else {
-            @SuppressWarnings("unchecked")
-                SQLTable<Object> table = (SQLTable<Object>) tables.get(inst.getClass());
-            if (table == null) {
-                throw new PersistenceException("Table not found for object of class "
-                                               + inst.getClass().getName());
-            }
-            return table.save(connection, Arrays.asList(inst), doIgnore, doUpdate, columnNames);
-        }
     }
 
-    private int update(Connection connection, Object inst, Set<String> columnNames) {
-        @SuppressWarnings("unchecked")
-        SQLTable<Object> table = (SQLTable<Object>) tables.get(inst.getClass());
-        if (table == null) {
-            throw new PersistenceException("Table not found for object of class " + inst.getClass().getName());
-        }
-        return table.update(connection, inst, columnNames);
+    private <E extends SQLRow> int update(Connection connection, E instance, Set<String> columnNames) {
+        SQLTable<E> table = getTable(instance);
+        return table.update(connection, instance, columnNames);
     }
 
-    public int saveIgnore(Object inst) {
-        return save(getConnection(), inst, true, true, null);
+    public <E extends SQLRow> int saveIgnore(E instance) {
+        return save(getConnection(), instance, true, true, null);
     }
 
-    public void saveIgnoreAsync(Object inst, Consumer<Integer> callback) {
+    public <E extends SQLRow> void saveIgnoreAsync(E instance, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, true, true, null);
+                int result = save(getAsyncConnection(), instance, true, true, null);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
             });
     }
 
-    public int save(Object inst) {
-        return save(getConnection(), inst, false, true, null);
+    public <E extends SQLRow> int save(E instance) {
+        return save(getConnection(), instance, false, true, null);
     }
 
-    public void saveAsync(Object inst, Consumer<Integer> callback) {
+    public <E extends SQLRow> void saveAsync(E instance, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, false, true, null);
+                int result = save(getAsyncConnection(), instance, false, true, null);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
             });
     }
 
-    public int save(Object inst, String... fields) {
-        return save(getConnection(), inst, false, true,
-                    new LinkedHashSet<>(Arrays.asList(fields)));
+    public <E extends SQLRow> int save(E instance, String... fields) {
+        return save(getConnection(), instance, false, true,
+                    new LinkedHashSet<>(List.of(fields)));
     }
 
-    public void saveAsync(Object inst, Consumer<Integer> callback, String... fields) {
+    public <E extends SQLRow> void saveAsync(E instance, Consumer<Integer> callback, String... fields) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, false, true,
-                                  new LinkedHashSet<>(Arrays.asList(fields)));
+                int result = save(getAsyncConnection(), instance, false, true,
+                                  new LinkedHashSet<>(List.of(fields)));
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
             });
     }
 
-    public int save(Object inst, Set<String> fields) {
-        return save(getConnection(), inst, false, true, fields);
+    public <E extends SQLRow> int save(E instance, Set<String> fields) {
+        return save(getConnection(), instance, false, true, fields);
     }
 
-    public void saveAsync(Object inst, Set<String> fields, Consumer<Integer> callback) {
+    public <E extends SQLRow> void saveAsync(E instance, Set<String> fields, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, false, true, fields);
+                int result = save(getAsyncConnection(), instance, false, true, fields);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
             });
     }
 
-    public void saveIgnoreAsync(Object inst, Set<String> fields, Consumer<Integer> callback) {
+    public <E extends SQLRow> void saveIgnoreAsync(E instance, Set<String> fields, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, true, true, fields);
+                int result = save(getAsyncConnection(), instance, true, true, fields);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
             });
     }
 
-    public int update(Object inst, String... fields) {
-        return update(getConnection(), inst, new LinkedHashSet<>(Arrays.asList(fields)));
+    public <E extends SQLRow> int update(E instance, String... fields) {
+        return update(getConnection(), instance, new LinkedHashSet<>(List.of(fields)));
     }
 
-    public void updateAsync(Object inst, Consumer<Integer> callback, String... fields) {
+    public <E extends SQLRow> void updateAsync(E instance, Consumer<Integer> callback, String... fields) {
         scheduleAsyncTask(() -> {
-                int result = update(getAsyncConnection(), inst, new LinkedHashSet<>(Arrays.asList(fields)));
+                int result = update(getAsyncConnection(), instance, new LinkedHashSet<>(List.of(fields)));
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
             });
     }
 
-    public int insert(Object inst) {
-        return save(getConnection(), inst, false, false, null);
+    public <E extends SQLRow> int insert(E instance) {
+        return save(getConnection(), instance, false, false, null);
     }
 
-    public int insertIgnore(Object inst) {
-        return save(getConnection(), inst, true, false, null);
+    public <E extends SQLRow> int insertIgnore(E instance) {
+        return save(getConnection(), instance, true, false, null);
     }
 
-    public void insertAsync(Object inst, Consumer<Integer> callback) {
+    public <E extends SQLRow> void insertAsync(E instance, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, false, false, null);
+                int result = save(getAsyncConnection(), instance, false, false, null);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
             });
     }
 
-    public void insertIgnoreAsync(Object inst, Consumer<Integer> callback) {
+    public <E extends SQLRow> void insertIgnoreAsync(E instance, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = save(getAsyncConnection(), inst, true, false, null);
+                int result = save(getAsyncConnection(), instance, true, false, null);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
@@ -326,37 +331,25 @@ public final class SQLDatabase {
 
     // --- API: Delete
 
-    private int delete(Connection connection, Object inst) {
-        if (inst instanceof Collection) {
-            @SuppressWarnings("unchecked")
-                Collection<Object> collection = (Collection<Object>) inst;
+    private <E extends SQLRow> int delete(Connection connection, E instance) {
+        SQLTable<E> table = getTable(instance);
+        return table.delete(connection, List.of(instance));
+    }
+
+    private <E extends SQLRow> int delete(Connection connection, Collection<E> collection) {
             if (collection.isEmpty()) return 0;
-            Object o = collection.iterator().next();
-            @SuppressWarnings("unchecked")
-                SQLTable<Object> table = (SQLTable<Object>) tables.get(o.getClass());
-            if (table == null) {
-                throw new PersistenceException("Table not found found for class "
-                                               + o.getClass().getName());
-            }
+            E any = collection.iterator().next();
+            SQLTable<E> table = getTable(any);
             return table.delete(connection, collection);
-        } else {
-            @SuppressWarnings("unchecked")
-                SQLTable<Object> table = (SQLTable<Object>) tables.get(inst.getClass());
-            if (table == null) {
-                throw new PersistenceException("Table not found found for class "
-                                               + inst.getClass().getName());
-            }
-            return table.delete(connection, Arrays.asList(inst));
-        }
     }
 
-    public int delete(Object inst) {
-        return delete(getConnection(), inst);
+    public <E extends SQLRow> int delete(E instance) {
+        return delete(getConnection(), instance);
     }
 
-    public void deleteAsync(Object inst, Consumer<Integer> callback) {
+    public <E extends SQLRow> void deleteAsync(E instance, Consumer<Integer> callback) {
         scheduleAsyncTask(() -> {
-                int result = delete(getAsyncConnection(), inst);
+                int result = delete(getAsyncConnection(), instance);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
@@ -454,7 +447,7 @@ public final class SQLDatabase {
         return asyncConnection;
     }
 
-    void debugLog(Object o) {
+    protected void debugLog(Object o) {
         if (!debug) return;
         plugin.getLogger().info("[SQL] " + o);
     }
@@ -559,9 +552,8 @@ public final class SQLDatabase {
         return asyncQueue.size();
     }
 
-    public <E> SQLUpdater<E> update(Class<E> clazz) {
+    public <E extends SQLRow> SQLUpdater<E> update(Class<E> clazz) {
         SQLTable<E> table = getTable(clazz);
-        if (table == null) throw new IllegalStateException("Table not found: " + clazz);
         return new SQLUpdater<E>(this, table);
     }
 }

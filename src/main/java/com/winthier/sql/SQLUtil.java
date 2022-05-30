@@ -68,6 +68,8 @@ public final class SQLUtil {
                 statement.setBoolean(index, (Boolean) value);
             } else if (value instanceof Integer) {
                 statement.setInt(index, (Integer) value);
+            } else if (value instanceof Long) {
+                statement.setLong(index, (Long) value);
             } else if (value instanceof Float) {
                 statement.setFloat(index, (Float) value);
             } else if (value instanceof Double) {

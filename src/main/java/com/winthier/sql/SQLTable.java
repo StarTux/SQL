@@ -28,7 +28,7 @@ import lombok.Value;
 import org.bukkit.Bukkit;
 
 @Getter
-public final class SQLTable<E> {
+public final class SQLTable<E extends SQLRow> {
     private final Class<E> clazz;
     private final SQLDatabase database;
     private String tableName;
@@ -38,7 +38,7 @@ public final class SQLTable<E> {
     private final Constructor<E> ctor;
 
     @Value
-    static class Key {
+    protected static class Key {
         private boolean unique;
         private String name;
         private List<SQLColumn> columns;
@@ -48,7 +48,7 @@ public final class SQLTable<E> {
         }
     }
 
-    SQLTable(final Class<E> clazz, final SQLDatabase database) {
+    protected SQLTable(final Class<E> clazz, final SQLDatabase database) {
         this.clazz = clazz;
         this.database = database;
         try {
@@ -128,7 +128,7 @@ public final class SQLTable<E> {
         return null;
     }
 
-    String getCreateTableStatement() {
+    protected String getCreateTableStatement() {
         StringBuilder sb = new StringBuilder();
         sb.append("CREATE TABLE IF NOT EXISTS `").append(getTableName()).append("` (\n  ");
         sb.append(columns.get(0).getCreateTableFragment());
@@ -154,7 +154,7 @@ public final class SQLTable<E> {
         return sb.toString();
     }
 
-    int getRowCount(Connection connection) {
+    protected int getRowCount(Connection connection) {
         try (Statement statement = connection.createStatement()) {
             String sql = "SELECT COUNT(*) `count` FROM `" + getTableName() + "`";
             database.debugLog(sql);
@@ -166,7 +166,7 @@ public final class SQLTable<E> {
         }
     }
 
-    E createInstance(Connection connection, ResultSet result) {
+    protected E createInstance(Connection connection, ResultSet result) {
         E row;
         try {
             row = ctor.newInstance();
@@ -186,7 +186,7 @@ public final class SQLTable<E> {
         return row;
     }
 
-    int save(Connection connection, Collection<E> instances, boolean doIgnore, boolean doUpdate, Set<String> columnNames) {
+    protected int save(Connection connection, Collection<E> instances, boolean doIgnore, boolean doUpdate, Set<String> columnNames) {
         if (instances.isEmpty()) throw new PersistenceException("Instances cannot be empty");
         // Collect all columns used in the statement
         Set<SQLColumn> columnSet = new LinkedHashSet<>(columns.size());
@@ -238,7 +238,7 @@ public final class SQLTable<E> {
         sb.append("`) VALUES");
         List<Object> values = new ArrayList<>(instances.size() * columnSet.size());
         boolean first = true;
-        for (Object inst: instances) {
+        for (SQLRow inst : instances) {
             if (!first) sb.append(",");
             first = false;
             sb.append(" (");
@@ -275,7 +275,7 @@ public final class SQLTable<E> {
             }
             if (idColumn != null) {
                 ResultSet keySet = statement.getGeneratedKeys();
-                for (Object inst: instances) {
+                for (SQLRow inst : instances) {
                     if (idColumn.getValue(inst) == null) {
                         if (keySet.next()) {
                             int newId = keySet.getInt(1);
@@ -294,7 +294,7 @@ public final class SQLTable<E> {
         }
     }
 
-    int update(Connection connection, E instance, Set<String> columnNames) {
+    protected int update(Connection connection, E instance, Set<String> columnNames) {
         if (idColumn == null) throw new IllegalStateException("No id column: " + tableName);
         List<SQLColumn> columnList = new ArrayList<>();
         if (columnNames == null || columnNames.isEmpty()) {
@@ -333,10 +333,10 @@ public final class SQLTable<E> {
         }
     }
 
-    int delete(Connection connection, Collection<Object> collection) {
+    protected int delete(Connection connection, Collection<E> collection) {
         if (collection.isEmpty()) return -1;
         if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
-        Iterator<?> iter = collection.iterator();
+        Iterator<E> iter = collection.iterator();
         StringBuilder sb = new StringBuilder();
         sb.append((Integer) idColumn.getValue(iter.next()));
         while (iter.hasNext()) {
@@ -351,7 +351,7 @@ public final class SQLTable<E> {
         }
     }
 
-    E find(Connection connection, int id) {
+    protected E find(Connection connection, int id) {
         if (idColumn == null) throw new PersistenceException("No id column defined: " + clazz.getName());
         try (Statement statement = connection.createStatement()) {
             String sql = "SELECT * FROM " + getTableName() + " WHERE " + idColumn.getColumnName() + " = " + id;
@@ -370,11 +370,11 @@ public final class SQLTable<E> {
         }
     }
 
-    Finder find() {
+    protected Finder find() {
         return new Finder();
     }
 
-    enum Comparison {
+    protected enum Comparison {
         EQ("="),
         NEQ("!="),
         LT("<"),
@@ -408,10 +408,16 @@ public final class SQLTable<E> {
             String columnName = column.getColumnName();
             sb.append(conj).append("`").append(columnName).append("`").append(" " + comp.symbol + " ?");
             if (column.getType() == SQLType.REFERENCE) {
-                SQLTable refTable = database.getTable(column.getField().getType());
-                if (refTable == null) throw new PersistenceException("Table not registered: " + column.getField().getType().getName());
-                if (refTable.idColumn == null) throw new PersistenceException("Referenced table lacks id column: " + refTable.getTableName());
-                values.add(refTable.idColumn.getValue(value));
+                Class<?> type = column.getField().getType();
+                SQLTable refTable = database.findTable(type);
+                if (refTable.idColumn == null) {
+                    throw new IllegalStateException("Referenced table lacks id column: " + refTable.getTableName());
+                }
+                if (!(value instanceof SQLRow instance)) {
+                    throw new IllegalArgumentException("Required type " + type.getName() + " (SQLRow)"
+                                                       + ", got " + value.getClass().getName());
+                }
+                values.add(refTable.idColumn.getValue(instance));
             } else {
                 values.add(value);
             }
@@ -495,14 +501,26 @@ public final class SQLTable<E> {
             }
             sb.append(conj).append("`").append(columnName).append("`").append(" IN (?");
             if (column.getType() == SQLType.REFERENCE) {
-                values.add(database.getTable(column.getField().getType()).idColumn.getValue(iter.next()));
+                Class<?> type = column.getField().getType();
+                Object value = iter.next();
+                if (!(value instanceof SQLRow instance)) {
+                    throw new IllegalArgumentException("Required type " + type.getName() + " (SQLRow)"
+                                                       + ", got " + value.getClass().getName());
+                }
+                values.add(database.findTable(type).idColumn.getValue(instance));
             } else {
                 values.add(iter.next());
             }
             while (iter.hasNext()) {
                 sb.append(", ?");
                 if (column.getType() == SQLType.REFERENCE) {
-                    values.add(database.getTable(column.getField().getType()).idColumn.getValue(iter.next()));
+                    Class<?> type = column.getField().getType();
+                    Object value = iter.next();
+                    if (!(value instanceof SQLRow instance)) {
+                        throw new IllegalArgumentException("Required type " + type.getName() + " (SQLRow)"
+                                                           + ", got " + value.getClass().getName());
+                    }
+                    values.add(database.findTable(type).idColumn.getValue(instance));
                 } else {
                     values.add(iter.next());
                 }
@@ -662,7 +680,7 @@ public final class SQLTable<E> {
 
         // --- Finder: create statements
 
-        PreparedStatement getSelectStatement(Connection connection) throws SQLException {
+        protected PreparedStatement getSelectStatement(Connection connection) throws SQLException {
             if (!order.isEmpty()) {
                 sb.append(" ORDER BY ").append(order.get(0));
                 for (int i = 1; i < order.size(); ++i) {
@@ -679,7 +697,7 @@ public final class SQLTable<E> {
             return statement;
         }
 
-        PreparedStatement getDeleteStatement(Connection connection) throws SQLException {
+        protected PreparedStatement getDeleteStatement(Connection connection) throws SQLException {
             if (limit > 0) {
                 sb.append(" LIMIT " + limit);
                 if (offset > -1) sb.append(" OFFSET " + offset);
@@ -690,7 +708,7 @@ public final class SQLTable<E> {
             return statement;
         }
 
-        PreparedStatement getRowCountStatement(Connection connection) throws SQLException {
+        protected PreparedStatement getRowCountStatement(Connection connection) throws SQLException {
             String sql = "SELECT count(*) row_count FROM `" + getTableName() + "`" + sb.toString();
             PreparedStatement statement = connection.prepareStatement(sql);
             SQLUtil.formatStatement(statement, values);

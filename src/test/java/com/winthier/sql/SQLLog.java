@@ -4,7 +4,6 @@ import java.util.Date;
 import java.util.Random;
 import java.util.UUID;
 import javax.persistence.Column;
-import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
 import javax.persistence.UniqueConstraint;
@@ -13,13 +12,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.bukkit.Material;
 
-@Entity
 @Table(name = "log",
        uniqueConstraints = {@UniqueConstraint(columnNames = {"playerUuid", "playerName"})})
-@Getter
-@Setter
-@NoArgsConstructor
-public final class SQLLog {
+@Getter @Setter @NoArgsConstructor
+public final class SQLLog implements SQLRow {
     @Id private Integer id;
     @Column(nullable = false)
     private Date time;
