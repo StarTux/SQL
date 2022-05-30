@@ -11,7 +11,6 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -300,12 +299,21 @@ public final class SQLDatabase {
     }
 
     public <E extends SQLRow> int update(E instance, String... fields) {
-        return update(getConnection(), instance, new LinkedHashSet<>(List.of(fields)));
+        return update(getConnection(), instance, Set.of(fields));
     }
 
     public <E extends SQLRow> void updateAsync(E instance, Consumer<Integer> callback, String... fields) {
         scheduleAsyncTask(() -> {
-                int result = update(getAsyncConnection(), instance, new LinkedHashSet<>(List.of(fields)));
+                int result = update(getAsyncConnection(), instance, Set.of(fields));
+                if (callback != null) {
+                    Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
+                }
+            });
+    }
+
+    public <E extends SQLRow> void updateAsync(E instance, Set<String> fields, Consumer<Integer> callback) {
+        scheduleAsyncTask(() -> {
+                int result = update(getAsyncConnection(), instance, fields);
                 if (callback != null) {
                     Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                 }
