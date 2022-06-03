@@ -104,7 +104,7 @@ public final class SQLColumn {
             return "double";
         case DATE:
             return "datetime";
-        case BOOL:
+        case BOOLEAN:
             return "tinyint";
         case ENUM:
             return "int";

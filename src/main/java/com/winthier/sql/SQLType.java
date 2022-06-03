@@ -6,6 +6,11 @@ import java.util.UUID;
 import javax.persistence.ManyToOne;
 import javax.persistence.OneToOne;
 
+/**
+ * Java types representable in SQL.  Changes here may need to be reflected in other places:
+ * - SQLColumn#getTypeDefinition
+ * - SQLUtil#formatStatement (maybe)
+ */
 enum SQLType {
     INT,
     LONG,
@@ -14,7 +19,7 @@ enum SQLType {
     FLOAT,
     DOUBLE,
     DATE,
-    BOOL,
+    BOOLEAN,
     ENUM,
     REFERENCE;
 
@@ -35,7 +40,7 @@ enum SQLType {
         } else if (Date.class.isAssignableFrom(fieldType)) {
             return SQLType.DATE;
         } else if (fieldType == Boolean.class || fieldType == boolean.class) {
-            return SQLType.BOOL;
+            return SQLType.BOOLEAN;
         } else if (Enum.class.isAssignableFrom(fieldType)) {
             return SQLType.ENUM;
         } else if (field.getAnnotation(ManyToOne.class) != null || field.getAnnotation(OneToOne.class) != null) {
