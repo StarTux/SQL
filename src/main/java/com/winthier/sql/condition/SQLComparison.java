@@ -25,9 +25,6 @@ public final class SQLComparison implements SQLCondition {
         case GTE:
             if (rvalue != null) throw new IllegalArgumentException(comparator + ": rvalue must be null");
             if (value == null) throw new IllegalArgumentException(comparator + ": value cannot be null");
-            if (!(value instanceof Number)) {
-                throw new IllegalArgumentException(comparator + ": number required!");
-            }
             break;
         case LIKE:
             if (rvalue != null) throw new IllegalArgumentException(comparator + ": rvalue must be null");
@@ -38,12 +35,6 @@ public final class SQLComparison implements SQLCondition {
         case BETWEEN:
             if (value == null) throw new IllegalArgumentException(comparator + ": value cannot be null");
             if (rvalue == null) throw new IllegalArgumentException(comparator + ": rvalue cannot be null");
-            if (!(value instanceof Number)) {
-                throw new IllegalArgumentException(comparator + ": value: number required!");
-            }
-            if (!(rvalue instanceof Number)) {
-                throw new IllegalArgumentException(comparator + ": rvalue: number required!");
-            }
             break;
         default:
             throw new IllegalArgumentException(comparator + ": comparator not implemented");

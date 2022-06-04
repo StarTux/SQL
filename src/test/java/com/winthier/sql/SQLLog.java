@@ -1,33 +1,32 @@
 package com.winthier.sql;
 
+import com.winthier.sql.SQLRow.*;
 import java.util.Date;
 import java.util.Random;
 import java.util.UUID;
-import javax.persistence.Column;
-import javax.persistence.Id;
-import javax.persistence.Table;
-import javax.persistence.UniqueConstraint;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.Data;
 import org.bukkit.Material;
 
-@Table(name = "log",
-       uniqueConstraints = {@UniqueConstraint(columnNames = {"playerUuid", "playerName"})})
-@Getter @Setter @NoArgsConstructor
+@Data @Name("logs") @NotNull
+@Key({"time", "playerName", "playerUuid"})
+@UniqueKey(value = {"playerUuid", "playerName"}, name = "xyz")
 public final class SQLLog implements SQLRow {
-    @Id private Integer id;
-    @Column(nullable = false)
+    @Id
+    private Long id;
+
+    @Default("NOW()")
     private Date time;
+
+    @Unique
     private UUID playerUuid;
+
+    @VarChar(16)
     private String playerName;
-    @Column(unique = true)
+
+    @Keyed("mat") @VarChar(40) @Name("mat")
     private Material material;
 
-    @Override
-    public String toString() {
-        return String.format("SQLLog(id=%d time=%s material=%s)", id, time, material);
-    }
+    private byte[] bytes;
 
     public static SQLLog mktest() {
         Random random = new Random(System.currentTimeMillis());

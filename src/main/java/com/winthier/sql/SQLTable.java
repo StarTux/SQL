@@ -1,5 +1,6 @@
 package com.winthier.sql;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -12,7 +13,9 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,7 @@ import javax.persistence.OneToMany;
 import javax.persistence.PersistenceException;
 import javax.persistence.Table;
 import javax.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Value;
 import org.bukkit.Bukkit;
@@ -33,15 +37,17 @@ public final class SQLTable<E extends SQLRow> {
     private final SQLDatabase database;
     private String tableName;
     private SQLColumn idColumn;
-    private final List<Key> keys = new ArrayList<>();
+    private final Map<String, Key> keys = new LinkedHashMap<>();
     private final List<SQLColumn> columns = new ArrayList<>();
     private final Constructor<E> ctor;
+    private final Map<String, SQLColumn> columnNameMap = new HashMap<>();
+    private boolean notNull; // default value
 
-    @Value
+    @Value @AllArgsConstructor
     protected static class Key {
-        private boolean unique;
-        private String name;
-        private List<SQLColumn> columns;
+        private final boolean unique;
+        private final String name;
+        private final List<SQLColumn> columns;
 
         static Key of(SQLColumn column) {
             return new Key(true, column.getColumnName(), Arrays.asList(column));
@@ -56,13 +62,20 @@ public final class SQLTable<E extends SQLRow> {
         } catch (NoSuchMethodException nsme) {
             throw new PersistenceException(nsme);
         }
-        Table tableAnnotation = clazz.getAnnotation(Table.class);
         String tablePrefix = database == null ? "" : database.getConfig().getPrefix();
+        Table tableAnnotation = clazz.getAnnotation(Table.class);
         if (tableAnnotation != null) {
             tableName = tablePrefix + tableAnnotation.name();
         }
+        SQLRow.Name nameAnnotation = clazz.getAnnotation(SQLRow.Name.class);
+        if (nameAnnotation != null) {
+            tableName = tablePrefix + nameAnnotation.value();
+        }
         if (tableName == null || tableName.isEmpty()) {
             tableName = tablePrefix + SQLUtil.camelToLowerCase(clazz.getSimpleName());
+        }
+        if (clazz.isAnnotationPresent(SQLRow.NotNull.class)) {
+            notNull = true;
         }
         // Columns
         for (Field field: clazz.getDeclaredFields()) {
@@ -74,10 +87,13 @@ public final class SQLTable<E extends SQLRow> {
                 || Map.class.isAssignableFrom(field.getType())) continue;
             SQLColumn column = new SQLColumn(this, field);
             columns.add(column);
+            columnNameMap.put(column.getColumnName(), column);
+            columnNameMap.put(column.getFieldName(), column);
             if (column.isId()) {
                 idColumn = column;
             } else if (column.isUnique()) {
-                keys.add(Key.of(column));
+                Key key = Key.of(column);
+                keys.put(key.name, key);
             }
         }
         // Keys
@@ -86,46 +102,89 @@ public final class SQLTable<E extends SQLRow> {
             UniqueConstraint[] constraints = tableAnnotation.uniqueConstraints();
             if (constraints != null) {
                 int counter = 0;
-                for (UniqueConstraint constraint: constraints) {
+                for (UniqueConstraint constraint : constraints) {
                     counter += 1;
-                    String name = "uq_" + getTableName() + "_" + counter;
-                    List<SQLColumn> constraintColumns = new ArrayList<>();
-                    for (String columnName: constraint.columnNames()) {
-                        SQLColumn column = getColumn(columnName);
-                        if (column == null) throw new IllegalArgumentException(clazz.getName() + ": Column for unique constraint not found: " + columnName);
-                        constraintColumns.add(column);
-                        column.setUnique(true);
+                    String name = constraint.name();
+                    if (name == null || name.isEmpty()) {
+                        name = "uq_" + getTableName() + "_" + counter;
                     }
-                    keys.add(new Key(true, name, constraintColumns));
+                    List<SQLColumn> constraintColumns = new ArrayList<>();
+                    for (String columnName : constraint.columnNames()) {
+                        SQLColumn column = getColumn(columnName);
+                        constraintColumns.add(column);
+                    }
+                    keys.put(name, new Key(true, name, constraintColumns));
                 }
             }
             // Index annotation
             Index[] indexes = tableAnnotation.indexes();
             if (indexes != null) {
                 int counter = 0;
-                for (Index index: indexes) {
+                for (Index index : indexes) {
                     counter += 1;
-                    String name = "key_" + getTableName() + "_" + counter;
+                    String name = index.name();
+                    if (name == null || name.isEmpty()) {
+                        name = "key_" + getTableName() + "_" + counter;
+                    }
                     if (index.name() != null && !index.name().isEmpty()) name = index.name();
                     List<SQLColumn> indexColumns = new ArrayList<>();
-                    for (String columnName: index.columnList().split(", ?")) {
+                    for (String columnName : index.columnList().split(", ?")) {
                         SQLColumn column = getColumn(columnName);
-                        if (column == null) throw new IllegalArgumentException(clazz.getName() + ": Column for index not found: " + columnName);
                         indexColumns.add(column);
-                        if (index.unique()) column.setUnique(true);
                     }
-                    keys.add(new Key(index.unique(), name, indexColumns));
+                    keys.put(name, new Key(index.unique(), name, indexColumns));
                 }
+            }
+        }
+        for (Annotation annotation : clazz.getDeclaredAnnotations()) {
+            if (annotation instanceof SQLRow.UniqueKey uniqueKey) {
+                List<SQLColumn> columnList = new ArrayList<>();
+                for (String columnName : uniqueKey.value()) {
+                    columnList.add(getColumn(columnName));
+                }
+                if (columnList.isEmpty()) {
+                    throw new IllegalStateException("Column list empty: "
+                                                    + clazz.getName() + "/" + uniqueKey.name());
+                }
+                String name = !uniqueKey.name().isEmpty()
+                    ? uniqueKey.name()
+                    : String.join("_", uniqueKey.value()).toLowerCase();
+                keys.put(name, new Key(true, name, columnList));
+            } else if (annotation instanceof SQLRow.Key key) {
+                List<SQLColumn> columnList = new ArrayList<>();
+                for (String columnName : key.value()) {
+                    columnList.add(getColumn(columnName));
+                }
+                if (columnList.isEmpty()) {
+                    throw new IllegalStateException("Column list empty: "
+                                                    + clazz.getName() + "/" + key.name());
+                }
+                String name = !key.name().isEmpty()
+                    ? key.name()
+                    : String.join("_", key.value()).toLowerCase();
+                keys.put(name, new Key(false, name, columnList));
+            }
+        }
+        for (SQLColumn col : columns) {
+            if (col.getUniqueKeyName() != null) {
+                String name = !col.getUniqueKeyName().isEmpty()
+                    ? col.getUniqueKeyName()
+                    : col.getColumnName();
+                keys.put(name, new Key(true, name, List.of(col)));
+            }
+            if (col.getKeyName() != null) {
+                String name = !col.getKeyName().isEmpty()
+                    ? col.getKeyName()
+                    : col.getColumnName();
+                keys.put(name, new Key(false, name, List.of(col)));
             }
         }
     }
 
     public SQLColumn getColumn(String label) {
-        for (SQLColumn column: columns) {
-            if (column.getColumnName().equals(label)) return column;
-            if (column.getField().getName().equals(label)) return column;
-        }
-        return null;
+        SQLColumn result = columnNameMap.get(label);
+        if (result == null) throw new IllegalStateException("Column not found: " + clazz.getName() + "." + label);
+        return result;
     }
 
     protected String getCreateTableStatement() {
@@ -137,7 +196,7 @@ public final class SQLTable<E extends SQLRow> {
             sb.append(columns.get(i).getCreateTableFragment());
         }
         if (idColumn != null) sb.append(",\n  PRIMARY KEY (`").append(idColumn.getColumnName()).append("`)");
-        for (Key key: keys) {
+        for (Key key : keys.values()) {
             if (key.isUnique()) {
                 sb.append(",\n  UNIQUE KEY `").append(key.getName()).append("` (`");
             } else {
@@ -166,7 +225,7 @@ public final class SQLTable<E extends SQLRow> {
         }
     }
 
-    protected E createInstance(Connection connection, ResultSet result) {
+    protected E createInstance(Connection connection, ResultSet result, List<SQLColumn> columnList) {
         E row;
         try {
             row = ctor.newInstance();
@@ -177,11 +236,11 @@ public final class SQLTable<E extends SQLRow> {
         } catch (InvocationTargetException ite) {
             throw new PersistenceException(ite);
         }
-        for (SQLColumn column: columns) {
+        for (SQLColumn column : columnList) {
             column.load(connection, row, result);
         }
-        if (row instanceof SQLInterface) {
-            ((SQLInterface) row).onLoad(result);
+        if (row instanceof SQLInterface sqlInterface) {
+            sqlInterface.onLoad(result);
         }
         return row;
     }
@@ -202,19 +261,18 @@ public final class SQLTable<E extends SQLRow> {
         } else {
             // We never need the primary ID if this is just an insert.
             if (doUpdate && idColumn != null) columnSet.add(idColumn);
-            for (Key key: keys) {
+            for (Key key : keys.values()) {
                 if (key.unique) {
-                    for (SQLColumn uqColumn: key.columns) columnSet.add(uqColumn);
+                    for (SQLColumn uqColumn : key.columns) columnSet.add(uqColumn);
                 }
             }
-            for (SQLColumn column: columns) {
-                if (!column.isNullable()) {
+            for (SQLColumn column : columns) {
+                if (!column.hasDefaultValue()) {
                     columnSet.add(column);
                 }
             }
-            for (String columnName: columnNames) {
+            for (String columnName : columnNames) {
                 SQLColumn column = getColumn(columnName);
-                if (column == null) throw new PersistenceException("Field not found: " + tableName + "." + columnName);
                 columnSet.add(column);
                 updateColumns.add(column);
             }
@@ -303,7 +361,6 @@ public final class SQLTable<E extends SQLRow> {
         } else {
             for (String columnName : columnNames) {
                 SQLColumn column = getColumn(columnName);
-                if (column == null) throw new PersistenceException("Field not found: " + tableName + "." + columnName);
                 columnList.add(column);
             }
         }
@@ -359,7 +416,7 @@ public final class SQLTable<E extends SQLRow> {
             ResultSet result = statement.executeQuery(sql);
             E row;
             if (result.next()) {
-                row = createInstance(connection, result);
+                row = createInstance(connection, result, columns);
             } else {
                 row = null;
             }
@@ -398,17 +455,17 @@ public final class SQLTable<E extends SQLRow> {
         private int limit = -1;
         private final List<String> order = new ArrayList<>();
         private static final String DEFAULT_CONJ = " AND ";
+        private List<SQLColumn> columnList = null;
 
         Finder() { }
 
         private Finder compare(String label, Comparison comp, Object value) {
             if (value == null) throw new IllegalArgumentException("Value cannot be null!");
             SQLColumn column = getColumn(label);
-            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
             String columnName = column.getColumnName();
             sb.append(conj).append("`").append(columnName).append("`").append(" " + comp.symbol + " ?");
             if (column.getType() == SQLType.REFERENCE) {
-                Class<?> type = column.getField().getType();
+                Class<?> type = column.getFieldType();
                 SQLTable refTable = database.findTable(type);
                 if (refTable.idColumn == null) {
                     throw new IllegalStateException("Referenced table lacks id column: " + refTable.getTableName());
@@ -422,6 +479,28 @@ public final class SQLTable<E extends SQLRow> {
                 values.add(value);
             }
             conj = DEFAULT_CONJ;
+            return this;
+        }
+
+        public Finder select(String... columnNames) {
+            this.columnList = new ArrayList<>();
+            for (String name : columnNames) {
+                columnList.add(getColumn(name));
+            }
+            if (columnList.isEmpty()) {
+                throw new IllegalStateException("Column list empty");
+            }
+            return this;
+        }
+
+        public Finder select(Collection<String> columnNames) {
+            this.columnList = new ArrayList<>();
+            for (String name : columnNames) {
+                columnList.add(getColumn(name));
+            }
+            if (columnList.isEmpty()) {
+                throw new IllegalStateException("Column list empty");
+            }
             return this;
         }
 
@@ -480,7 +559,6 @@ public final class SQLTable<E extends SQLRow> {
             if (v1 == null) throw new IllegalArgumentException("v1 cannot be null!");
             if (v2 == null) throw new IllegalArgumentException("v2 cannot be null!");
             SQLColumn column = getColumn(label);
-            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
             String columnName = column.getColumnName();
             sb.append(conj).append("`").append(columnName).append("`").append(" BETWEEN ? AND ?");
             conj = DEFAULT_CONJ;
@@ -491,7 +569,6 @@ public final class SQLTable<E extends SQLRow> {
 
         public Finder in(String label, Collection<?> col) {
             SQLColumn column = getColumn(label);
-            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
             String columnName = column.getColumnName();
             Iterator<?> iter = col.iterator();
             if (!iter.hasNext()) {
@@ -501,7 +578,7 @@ public final class SQLTable<E extends SQLRow> {
             }
             sb.append(conj).append("`").append(columnName).append("`").append(" IN (?");
             if (column.getType() == SQLType.REFERENCE) {
-                Class<?> type = column.getField().getType();
+                Class<?> type = column.getFieldType();
                 Object value = iter.next();
                 if (!(value instanceof SQLRow instance)) {
                     throw new IllegalArgumentException("Required type " + type.getName() + " (SQLRow)"
@@ -514,7 +591,7 @@ public final class SQLTable<E extends SQLRow> {
             while (iter.hasNext()) {
                 sb.append(", ?");
                 if (column.getType() == SQLType.REFERENCE) {
-                    Class<?> type = column.getField().getType();
+                    Class<?> type = column.getFieldType();
                     Object value = iter.next();
                     if (!(value instanceof SQLRow instance)) {
                         throw new IllegalArgumentException("Required type " + type.getName() + " (SQLRow)"
@@ -532,7 +609,6 @@ public final class SQLTable<E extends SQLRow> {
 
         public Finder isNull(String label) {
             SQLColumn column = getColumn(label);
-            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
             sb.append(conj).append("`").append(column.getColumnName()).append("` IS NULL");
             conj = DEFAULT_CONJ;
             return this;
@@ -540,7 +616,6 @@ public final class SQLTable<E extends SQLRow> {
 
         public Finder isNotNull(String label) {
             SQLColumn column = getColumn(label);
-            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
             sb.append(conj).append("`").append(column.getColumnName()).append("` IS NOT NULL");
             conj = DEFAULT_CONJ;
             return this;
@@ -551,9 +626,13 @@ public final class SQLTable<E extends SQLRow> {
             return this;
         }
 
+        public Finder and() {
+            conj = " AND ";
+            return this;
+        }
+
         private Finder orderBy(String label, String direction) {
             SQLColumn column = getColumn(label);
-            if (column == null) throw new IllegalArgumentException("Column not found in " + clazz.getName() + ": " + label);
             order.add("`" + column.getColumnName() + "` " + direction);
             return this;
         }
@@ -590,7 +669,7 @@ public final class SQLTable<E extends SQLRow> {
                 database.debugLog(statement);
                 ResultSet result = statement.executeQuery();
                 if (result.next()) {
-                    return createInstance(connection, result);
+                    return createInstance(connection, result, columnList != null ? columnList : columns);
                 } else {
                     return null;
                 }
@@ -616,7 +695,7 @@ public final class SQLTable<E extends SQLRow> {
                 database.debugLog(statement);
                 ResultSet result = statement.executeQuery();
                 while (result.next()) {
-                    list.add(createInstance(connection, result));
+                    list.add(createInstance(connection, result, columnList != null ? columnList : columns));
                 }
             } catch (SQLException sqle) {
                 throw new PersistenceException(sqle);
@@ -631,6 +710,37 @@ public final class SQLTable<E extends SQLRow> {
         public void findListAsync(Consumer<List<E>> callback) {
             database.scheduleAsyncTask(() -> {
                     List<E> result = findList(database.getAsyncConnection());
+                    Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
+                });
+        }
+
+        public <E> List<E> findValues(Class<E> ofType) {
+            if (columnList == null || columnList.size() != 1) {
+                throw new IllegalStateException("Exactly one column must be selected: " + columnList);
+            }
+            List<E> list = new ArrayList<>();
+            Connection connection = database.getConnection();
+            try (PreparedStatement statement = getSelectStatement(connection)) {
+                database.debugLog(statement);
+                ResultSet result = statement.executeQuery();
+                while (result.next()) {
+                    Object obj = columnList.get(0).getObject(connection, result);
+                    if (ofType.isInstance(obj)) {
+                        list.add(ofType.cast(obj));
+                    }
+                }
+            } catch (SQLException sqle) {
+                throw new IllegalStateException(sqle);
+            }
+            return list;
+        }
+
+        public <E> void findValuesAsync(Class<E> ofType, Consumer<List<E>> callback) {
+            if (columnList == null || columnList.size() != 1) {
+                throw new IllegalStateException("Exactly one column must be selected: " + columnList);
+            }
+            database.scheduleAsyncTask(() -> {
+                    List<E> result = findValues(ofType);
                     Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
@@ -691,7 +801,17 @@ public final class SQLTable<E extends SQLRow> {
                 sb.append(" LIMIT " + limit);
                 if (offset > -1) sb.append(" OFFSET " + offset);
             }
-            String sql = "SELECT * FROM `" + getTableName() + "`" + sb.toString();
+            final String columnNameList;
+            if (columnList == null) {
+                columnNameList = "*";
+            } else {
+                List<String> columnNames = new ArrayList<>(columnList.size());
+                for (SQLColumn col : columnList) {
+                    columnNames.add("`" + col.getColumnName() + "`");
+                }
+                columnNameList = String.join(", ", columnNames);
+            }
+            String sql = "SELECT " + columnNameList + " FROM `" + getTableName() + "`" + sb.toString();
             PreparedStatement statement = connection.prepareStatement(sql);
             SQLUtil.formatStatement(statement, values);
             return statement;

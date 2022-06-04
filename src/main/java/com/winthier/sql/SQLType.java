@@ -21,30 +21,33 @@ enum SQLType {
     DATE,
     BOOLEAN,
     ENUM,
+    BYTE_ARRAY,
     REFERENCE;
 
     static SQLType of(Field field) {
         Class<?> fieldType = field.getType();
         if (fieldType == Integer.class || fieldType == int.class) {
-            return SQLType.INT;
+            return INT;
         } else if (fieldType == Long.class || fieldType == long.class) {
-            return SQLType.LONG;
+            return LONG;
         } else if (fieldType == String.class) {
-            return SQLType.STRING;
+            return STRING;
         } else if (fieldType == UUID.class) {
-            return SQLType.UUID;
+            return UUID;
         } else if (fieldType == Float.class || fieldType == float.class) {
-            return SQLType.FLOAT;
+            return FLOAT;
         } else if (fieldType == Double.class || fieldType == double.class) {
-            return SQLType.DOUBLE;
+            return DOUBLE;
         } else if (Date.class.isAssignableFrom(fieldType)) {
-            return SQLType.DATE;
+            return DATE;
         } else if (fieldType == Boolean.class || fieldType == boolean.class) {
-            return SQLType.BOOLEAN;
+            return BOOLEAN;
         } else if (Enum.class.isAssignableFrom(fieldType)) {
-            return SQLType.ENUM;
+            return ENUM;
         } else if (field.getAnnotation(ManyToOne.class) != null || field.getAnnotation(OneToOne.class) != null) {
-            return SQLType.REFERENCE;
+            return REFERENCE;
+        } else if (fieldType == byte[].class) {
+            return BYTE_ARRAY;
         } else {
             throw new IllegalArgumentException("No SQL type found for " + fieldType.getName());
         }

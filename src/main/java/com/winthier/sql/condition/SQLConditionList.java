@@ -87,7 +87,6 @@ public final class SQLConditionList implements SQLCondition {
 
     private SQLConditionList compare(final String label, SQLComparison.Comparator comparator, Object value, Object rvalue) {
         SQLColumn column = table.getColumn(label);
-        if (column == null) throw new IllegalStateException("Column not found: " + label);
         SQLComparison comparison = new SQLComparison(column, comparator, value, rvalue);
         list.add(comparison);
         return this;

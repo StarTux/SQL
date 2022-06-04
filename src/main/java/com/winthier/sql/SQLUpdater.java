@@ -154,7 +154,6 @@ public final class SQLUpdater<E extends SQLRow> {
 
     public SQLUpdater<E> addValue(final String key, final Object value, final Operation operation) {
         SQLColumn column = table.getColumn(key);
-        if (column == null) throw new IllegalStateException("Column not found: " + key);
         valueList.add(new NewValue(column, operation, value));
         return this;
     }

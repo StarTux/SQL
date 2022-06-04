@@ -612,4 +612,8 @@ public final class SQLDatabase {
         SQLTable<E> table = getTable(clazz);
         return new SQLUpdater<E>(this, table);
     }
+
+    public static <E extends SQLRow> String testTableCreation(Class<E> clazz) {
+        return new SQLTable<E>(clazz, null).getCreateTableStatement();
+    }
 }

@@ -1,5 +1,6 @@
 package com.winthier.sql;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -11,54 +12,112 @@ import java.util.List;
 import java.util.UUID;
 import javax.persistence.Column;
 import javax.persistence.Id;
-import javax.persistence.PersistenceException;
 import lombok.Getter;
-import lombok.Setter;
 
-@Getter
 public final class SQLColumn {
     private final SQLTable table;
     private final Field field;
-    private String columnName;
-    private String columnDefinition;
-    private final boolean nullable;
-    private final int length;
+    @Getter private final Class<?> fieldType;
+    @Getter private String columnName;
+    @Getter private final String fieldName;
+    private String defaultValueString;
+    @Getter private String columnDefinition;
+    private boolean notNull;
+    private boolean autoIncrement;
+    private int length;
     private final int precision;
-    private final SQLType type;
-    private final boolean id;
-    @Setter private boolean unique;
+    @Getter private final SQLType type;
+    @Getter private boolean id = false;
+    @Getter private boolean unique;
     private Method getterMethod;
     private Method setterMethod;
+    @Getter private String keyName;
+    @Getter private String uniqueKeyName;
 
     protected SQLColumn(final SQLTable table, final Field field) {
         this.table = table;
         this.field = field;
+        this.fieldType = field.getType();
+        this.notNull = table.isNotNull();
         Column columnAnnotation = field.getAnnotation(Column.class);
-        this.id = field.getAnnotation(Id.class) != null;
+        if (field.isAnnotationPresent(Id.class) || field.isAnnotationPresent(SQLRow.Id.class)) {
+            id = true;
+            autoIncrement = true;
+            notNull = true;
+        }
         if (columnAnnotation != null) {
             this.columnName = columnAnnotation.name();
             this.columnDefinition = columnAnnotation.columnDefinition();
-            this.nullable = columnAnnotation.nullable() && !id;
+            this.notNull = !columnAnnotation.nullable();
             this.length = columnAnnotation.length();
             this.precision = columnAnnotation.precision();
             this.unique = columnAnnotation.unique();
         } else {
-            this.nullable = !id;
             this.length = 255;
             this.precision = 0;
             this.unique = this.id;
         }
         type = SQLType.of(field);
+        String typeDefinition = null;
+        for (Annotation annotation : field.getDeclaredAnnotations()) {
+            if (annotation instanceof SQLRow.LongText) {
+                typeDefinition = "LONGTEXT";
+            } else if (annotation instanceof SQLRow.MediumText) {
+                typeDefinition = "MEDIUMTEXT";
+            } else if (annotation instanceof SQLRow.Text) {
+                typeDefinition = "TEXT";
+            } else if (annotation instanceof SQLRow.Char chr) {
+                length = chr.value();
+                typeDefinition = "CHAR(" + length + ")";
+            } else if (annotation instanceof SQLRow.VarChar varChar) {
+                length = varChar.value();
+                typeDefinition = "VARCHAR(" + length + ")";
+            } else if (annotation instanceof SQLRow.Binary binary) {
+                length = binary.value();
+                typeDefinition = "BINARY(" + length + ")";
+            } else if (annotation instanceof SQLRow.VarBinary varBinary) {
+                length = varBinary.value();
+                typeDefinition = "VARBINARY(" + length + ")";
+            } else if (annotation instanceof SQLRow.Default dfl) {
+                defaultValueString = dfl.value();
+            } else if (annotation instanceof SQLRow.NotNull) {
+                notNull = true;
+            } else if (annotation instanceof SQLRow.Nullable) {
+                notNull = false;
+            } else if (annotation instanceof SQLRow.Name name) {
+                this.columnName = name.value();
+            } else if (annotation instanceof SQLRow.Keyed keyed) {
+                this.keyName = keyed.value();
+            } else if (annotation instanceof SQLRow.Unique uq) {
+                this.uniqueKeyName = uq.value();
+            }
+        }
+        if (columnDefinition == null || columnDefinition.isEmpty()) {
+            if (typeDefinition == null) {
+                typeDefinition = computeTypeDefinition();
+            }
+            columnDefinition = typeDefinition
+                + (!notNull && !id
+                   ? ""
+                   : " NOT NULL")
+                + (!autoIncrement
+                   ? ""
+                   : " AUTO_INCREMENT")
+                + (defaultValueString == null || defaultValueString.isEmpty()
+                   ? ""
+                   : " DEFAULT " + defaultValueString);
+        }
+        this.fieldName = field.getName();
         if (columnName == null || columnName.isEmpty()) {
             if (type == SQLType.REFERENCE) {
-                columnName = SQLUtil.camelToLowerCase(field.getName()) + "_id";
+                columnName = SQLUtil.camelToLowerCase(fieldName) + "_id";
             } else {
-                columnName = SQLUtil.camelToLowerCase(field.getName());
+                columnName = SQLUtil.camelToLowerCase(fieldName);
             }
         }
         String getterName;
-        String fieldCamel = field.getName().substring(0, 1).toUpperCase() + field.getName().substring(1);
-        if (field.getType() == boolean.class) {
+        String fieldCamel = fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
+        if (fieldType == boolean.class) {
             getterName = "is" + fieldCamel;
         } else {
             getterName = "get" + fieldCamel;
@@ -66,72 +125,48 @@ public final class SQLColumn {
         String setterName = "set" + fieldCamel;
         try {
             getterMethod = field.getDeclaringClass().getMethod(getterName);
-            setterMethod = field.getDeclaringClass().getMethod(setterName, field.getType());
+            setterMethod = field.getDeclaringClass().getMethod(setterName, fieldType);
         } catch (NoSuchMethodException nsme) {
-            throw new PersistenceException(nsme);
+            throw new IllegalStateException(nsme);
         }
     }
 
-    public String getColumnName() {
-        return columnName;
+    private String computeTypeDefinition() {
+        return switch (type) {
+        case INT -> "INT" + computePrecisionDefinition();
+        case LONG -> "BIGINT" + computePrecisionDefinition();
+        case STRING -> computeStringTypeDefinition();
+        case UUID -> "VARCHAR(40)";
+        case FLOAT -> "FLOAT";
+        case DOUBLE -> "DOUBLE";
+        case DATE -> "DATETIME";
+        case BOOLEAN -> "TINYINT";
+        case ENUM -> "INT";
+        case REFERENCE -> "INT";
+        case BYTE_ARRAY -> "BINARY(" + length + ")";
+        };
     }
 
-    private String getTypeDefinition() {
-        switch (type) {
-        case INT:
-            return precision > 0
-                ? "int(" + precision + ")"
-                : "int";
-        case LONG:
-            return precision > 0
-                ? "bigint(" + precision + ")"
-                : "bigint";
-        case STRING:
-            if (length > 16777215) {
-                return "longtext";
-            } else if (length > 65535) {
-                return "mediumtext";
-            } else if (length > 1024) {
-                return "text";
-            } else {
-                return "varchar(" + length + ")";
-            }
-        case UUID:
-            return "varchar(40)";
-        case FLOAT:
-            return "float";
-        case DOUBLE:
-            return "double";
-        case DATE:
-            return "datetime";
-        case BOOLEAN:
-            return "tinyint";
-        case ENUM:
-            return "int";
-        case REFERENCE:
-            return "int";
-        default:
-            throw new IllegalArgumentException("Type definition not implemented: " + type);
-        }
+    private String computeStringTypeDefinition() {
+        if (length > 16777215) return "longtext";
+        if (length > 65535) return "mediumtext";
+        if (length > 1024) return "text";
+        return "varchar(" + length + ")";
     }
 
-    protected String getColumnDefinition() {
-        if (columnDefinition == null || columnDefinition.isEmpty()) {
-            if (id) {
-                columnDefinition = getTypeDefinition() + " AUTO_INCREMENT";
-            } else if (!nullable) {
-                columnDefinition = getTypeDefinition() + " NOT NULL";
-            } else {
-                columnDefinition = getTypeDefinition();
-            }
-        }
-        return columnDefinition;
+    private String computePrecisionDefinition() {
+        return precision > 0
+            ? "(" + precision + ")"
+            : "";
     }
 
     protected String getCreateTableFragment() {
-        return "`" + getColumnName() + "` " + getColumnDefinition();
+        return "`" + getColumnName() + "` " + columnDefinition;
     }
 
+    /**
+     * Load (set) a value from the ResultSet into the instance.
+     */
     protected void load(Connection connection, SQLRow instance, ResultSet result) {
         try {
             Object value;
@@ -153,7 +188,7 @@ public final class SQLColumn {
                     value = null;
                 } else {
                     try {
-                        Method method = field.getType().getMethod("values");
+                        Method method = fieldType.getMethod("values");
                         Object arr = method.invoke(null);
                         value = Array.get(arr, num);
                     } catch (Exception e) {
@@ -169,20 +204,64 @@ public final class SQLColumn {
                 if (num == 0 && result.wasNull()) {
                     value = null;
                 } else {
-                    SQLTable<? extends SQLRow> refTable = table.getDatabase().findTable(field.getType());
+                    SQLTable<? extends SQLRow> refTable = table.getDatabase().findTable(fieldType);
                     value = refTable.find(connection, num);
                 }
                 break;
             default:
-                value = result.getObject(getColumnName(), field.getType());
+                value = result.getObject(getColumnName(), fieldType);
             }
             setterMethod.invoke(instance, value);
         } catch (SQLException sqle) {
-            throw new PersistenceException(sqle);
+            throw new IllegalStateException(sqle);
         } catch (IllegalAccessException iae) {
-            throw new PersistenceException(iae);
+            throw new IllegalStateException(iae);
         } catch (InvocationTargetException ite) {
-            throw new PersistenceException(ite);
+            throw new IllegalStateException(ite);
+        }
+    }
+
+    public Object getObject(Connection connection, ResultSet result) {
+        try {
+            switch (type) {
+            case UUID:
+                String str = result.getObject(getColumnName(), String.class);
+                if (str == null) {
+                    return null;
+                } else {
+                    return UUID.fromString(str);
+                }
+            case DATE:
+                return result.getObject(getColumnName(), java.sql.Timestamp.class); // ???
+            case ENUM:
+                int num = result.getInt(getColumnName());
+                if (num == 0 && result.wasNull()) {
+                    return null;
+                } else {
+                    try {
+                        Method method = fieldType.getMethod("values");
+                        Object arr = method.invoke(null);
+                        return Array.get(arr, num);
+                    } catch (Exception e) {
+                        table.getDatabase().getPlugin().getLogger()
+                            .warning("Error loading enum from " + table.getTableName() + "." + columnName);
+                        e.printStackTrace();
+                        return null;
+                    }
+                }
+            case REFERENCE:
+                num = result.getInt(getColumnName());
+                if (num == 0 && result.wasNull()) {
+                    return null;
+                } else {
+                    SQLTable<? extends SQLRow> refTable = table.getDatabase().findTable(fieldType);
+                    return refTable.find(connection, num);
+                }
+            default:
+                return result.getObject(getColumnName(), fieldType);
+            }
+        } catch (SQLException sqle) {
+            throw new IllegalStateException(sqle);
         }
     }
 
@@ -204,12 +283,12 @@ public final class SQLColumn {
         } else {
             sb.append("?");
             if (type == SQLType.REFERENCE) {
-                SQLTable<? extends SQLRow> refTable = table.getDatabase().findTable(field.getType());
+                SQLTable<? extends SQLRow> refTable = table.getDatabase().findTable(fieldType);
                 if (refTable.getIdColumn() == null) {
                     throw new NullPointerException("Referenced table has no id column: " + value.getClass().getName());
                 }
                 if (!(value instanceof SQLRow row)) {
-                    throw new IllegalArgumentException("Required type " + field.getType().getName() + " (SQLRow)"
+                    throw new IllegalArgumentException("Required type " + fieldType.getName() + " (SQLRow)"
                                                        + ", got " + value.getClass().getName());
                 }
                 Object refId = refTable.getIdColumn().getValue(row);
@@ -231,12 +310,12 @@ public final class SQLColumn {
             return "`" + columnName + "` = NULL";
         } else {
             if (type == SQLType.REFERENCE) {
-                SQLTable<? extends SQLRow> refTable = table.getDatabase().findTable(field.getType());
+                SQLTable<? extends SQLRow> refTable = table.getDatabase().findTable(fieldType);
                 if (refTable.getIdColumn() == null) {
                     throw new NullPointerException("Referenced table has no id column: " + value.getClass().getName());
                 }
                 if (!(value instanceof SQLRow row)) {
-                    throw new IllegalArgumentException("Required type " + field.getType().getName() + " (SQLRow)"
+                    throw new IllegalArgumentException("Required type " + fieldType.getName() + " (SQLRow)"
                                                        + ", got " + value.getClass().getName());
                 }
                 Object refId = refTable.getIdColumn().getValue(row);
@@ -255,9 +334,9 @@ public final class SQLColumn {
         try {
             return getterMethod.invoke(instance);
         } catch (IllegalAccessException iae) {
-            throw new PersistenceException(iae);
+            throw new IllegalStateException(iae);
         } catch (InvocationTargetException ite) {
-            throw new PersistenceException(ite);
+            throw new IllegalStateException(ite);
         }
     }
 
@@ -265,9 +344,13 @@ public final class SQLColumn {
         try {
             setterMethod.invoke(instance, value);
         } catch (IllegalAccessException iae) {
-            throw new PersistenceException(iae);
+            throw new IllegalStateException(iae);
         } catch (InvocationTargetException ite) {
-            throw new PersistenceException(ite);
+            throw new IllegalStateException(ite);
         }
+    }
+
+    public boolean hasDefaultValue() {
+        return defaultValueString != null && !defaultValueString.isEmpty();
     }
 }

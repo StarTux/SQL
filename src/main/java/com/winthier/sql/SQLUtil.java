@@ -57,30 +57,31 @@ public final class SQLUtil {
     }
 
     public static void formatStatement(PreparedStatement statement, List<Object> values) throws SQLException {
-        for (int i = 0; i < values.size(); ++i) {
-            Object value = values.get(i);
-            int index = i + 1;
-            if (value instanceof String) {
-                statement.setString(index, (String) value);
-            } else if (value instanceof Date) {
-                statement.setTimestamp(index, new Timestamp(((Date) value).getTime()));
-            } else if (value instanceof Boolean) {
-                statement.setBoolean(index, (Boolean) value);
-            } else if (value instanceof Integer) {
-                statement.setInt(index, (Integer) value);
-            } else if (value instanceof Long) {
-                statement.setLong(index, (Long) value);
-            } else if (value instanceof Float) {
-                statement.setFloat(index, (Float) value);
-            } else if (value instanceof Double) {
-                statement.setDouble(index, (Double) value);
-            } else if (value instanceof UUID) {
-                statement.setString(index, value.toString());
-            } else if (value instanceof Enum) {
-                statement.setString(index, ((Enum) value).name());
+        for (int index = 1; index <= values.size(); index += 1) {
+            Object value = values.get(index - 1);
+            if (value instanceof String s) {
+                statement.setString(index, s);
+            } else if (value instanceof Date date) {
+                statement.setTimestamp(index, new Timestamp(date.getTime()));
+            } else if (value instanceof Boolean b) {
+                statement.setBoolean(index, b);
+            } else if (value instanceof Integer i) {
+                statement.setInt(index, i);
+            } else if (value instanceof Long l) {
+                statement.setLong(index, l);
+            } else if (value instanceof Float f) {
+                statement.setFloat(index, f);
+            } else if (value instanceof Double d) {
+                statement.setDouble(index, d);
+            } else if (value instanceof UUID uuid) {
+                statement.setString(index, uuid.toString());
+            } else if (value instanceof Enum en) {
+                statement.setInt(index, en.ordinal());
+            } else if (value instanceof byte[] byteArray) {
+                statement.setBytes(index, byteArray);
             } else {
                 String name = value == null ? "null" : value.getClass().getName();
-                throw new IllegalArgumentException("Unexpected type in '" + statement + "': " + name + ", " + values + ", ArrayIndex=" + i);
+                throw new IllegalArgumentException("Unexpected type in '" + statement + "': " + name + ", " + values + ", index=" + index);
             }
         }
     }
