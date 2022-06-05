@@ -3,8 +3,6 @@ package com.winthier.sql;
 import java.lang.reflect.Field;
 import java.util.Date;
 import java.util.UUID;
-import javax.persistence.ManyToOne;
-import javax.persistence.OneToOne;
 
 /**
  * Java types representable in SQL.  Changes here may need to be reflected in other places:
@@ -12,17 +10,30 @@ import javax.persistence.OneToOne;
  * - SQLUtil#formatStatement (maybe)
  */
 enum SQLType {
-    INT,
-    LONG,
-    STRING,
-    UUID,
-    FLOAT,
-    DOUBLE,
-    DATE,
-    BOOLEAN,
-    ENUM,
-    BYTE_ARRAY,
-    REFERENCE;
+    INT(Integer.class, int.class),
+    LONG(Long.class, int.class),
+    FLOAT(Float.class, float.class),
+    DOUBLE(Double.class, double.class),
+    BOOLEAN(Boolean.class, boolean.class),
+    STRING(String.class),
+    UUID(UUID.class),
+    DATE(Date.class),
+    ENUM(Enum.class),
+    BYTE_ARRAY(byte[].class),
+    REFERENCE(SQLRow.class);
+
+    private final Class<?>[] classes;
+
+    SQLType(final Class<?>... classes) {
+        this.classes = classes;
+    }
+
+    public boolean canYield(Class<?> clazz) {
+        for (Class<?> it : classes) {
+            if (it == clazz) return true;
+        }
+        return false;
+    }
 
     static SQLType of(Field field) {
         Class<?> fieldType = field.getType();
@@ -44,10 +55,10 @@ enum SQLType {
             return BOOLEAN;
         } else if (Enum.class.isAssignableFrom(fieldType)) {
             return ENUM;
-        } else if (field.getAnnotation(ManyToOne.class) != null || field.getAnnotation(OneToOne.class) != null) {
-            return REFERENCE;
         } else if (fieldType == byte[].class) {
             return BYTE_ARRAY;
+        } else if (SQLRow.class.isAssignableFrom(fieldType)) {
+            return REFERENCE;
         } else {
             throw new IllegalArgumentException("No SQL type found for " + fieldType.getName());
         }

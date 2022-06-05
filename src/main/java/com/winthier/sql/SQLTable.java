@@ -714,17 +714,19 @@ public final class SQLTable<E extends SQLRow> {
                 });
         }
 
-        public <E> List<E> findValues(Class<E> ofType) {
-            if (columnList == null || columnList.size() != 1) {
-                throw new IllegalStateException("Exactly one column must be selected: " + columnList);
+        public <E> List<E> findValues(String columnName, Class<E> ofType) {
+            SQLColumn column = getColumn(columnName);
+            if (!column.getType().canYield(ofType)) {
+                throw new IllegalStateException(ofType.getName() + "/" + column.getType());
             }
+            columnList = List.of(column);
             List<E> list = new ArrayList<>();
             Connection connection = database.getConnection();
             try (PreparedStatement statement = getSelectStatement(connection)) {
                 database.debugLog(statement);
                 ResultSet result = statement.executeQuery();
                 while (result.next()) {
-                    Object obj = columnList.get(0).getObject(connection, result);
+                    Object obj = column.getObject(connection, result);
                     if (ofType.isInstance(obj)) {
                         list.add(ofType.cast(obj));
                     }
@@ -735,12 +737,9 @@ public final class SQLTable<E extends SQLRow> {
             return list;
         }
 
-        public <E> void findValuesAsync(Class<E> ofType, Consumer<List<E>> callback) {
-            if (columnList == null || columnList.size() != 1) {
-                throw new IllegalStateException("Exactly one column must be selected: " + columnList);
-            }
+        public <E> void findValuesAsync(String columnName, Class<E> ofType, Consumer<List<E>> callback) {
             database.scheduleAsyncTask(() -> {
-                    List<E> result = findValues(ofType);
+                    List<E> result = findValues(columnName, ofType);
                     Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(result));
                 });
         }
