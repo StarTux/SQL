@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 import javax.persistence.PersistenceException;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.bukkit.Bukkit;
 
 @RequiredArgsConstructor
 public final class SQLUpdater<E extends SQLRow> {
@@ -142,7 +143,7 @@ public final class SQLUpdater<E extends SQLRow> {
         database.scheduleAsyncTask(() -> {
                 int res = sync();
                 if (callback != null) {
-                    callback.accept(res);
+                    Bukkit.getScheduler().runTask(database.getPlugin(), () -> callback.accept(res));
                 }
             });
     }
