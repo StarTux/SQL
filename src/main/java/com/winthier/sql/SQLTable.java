@@ -138,31 +138,17 @@ public final class SQLTable<E extends SQLRow> {
         }
         for (Annotation annotation : clazz.getDeclaredAnnotations()) {
             if (annotation instanceof SQLRow.UniqueKey uniqueKey) {
-                List<SQLColumn> columnList = new ArrayList<>();
-                for (String columnName : uniqueKey.value()) {
-                    columnList.add(getColumn(columnName));
-                }
-                if (columnList.isEmpty()) {
-                    throw new IllegalStateException("Column list empty: "
-                                                    + clazz.getName() + "/" + uniqueKey.name());
-                }
-                String name = !uniqueKey.name().isEmpty()
-                    ? uniqueKey.name()
-                    : String.join("_", uniqueKey.value()).toLowerCase();
-                keys.put(name, new Key(true, name, columnList));
+                handleUniqueKey(uniqueKey);
             } else if (annotation instanceof SQLRow.Key key) {
-                List<SQLColumn> columnList = new ArrayList<>();
-                for (String columnName : key.value()) {
-                    columnList.add(getColumn(columnName));
+                handleKey(key);
+            } else if (annotation instanceof SQLRow.Keys keysAnn) {
+                for (SQLRow.Key key : keysAnn.value()) {
+                    handleKey(key);
                 }
-                if (columnList.isEmpty()) {
-                    throw new IllegalStateException("Column list empty: "
-                                                    + clazz.getName() + "/" + key.name());
+            } else if (annotation instanceof SQLRow.UniqueKeys uniqueKeys) {
+                for (SQLRow.UniqueKey uniqueKey : uniqueKeys.value()) {
+                    handleUniqueKey(uniqueKey);
                 }
-                String name = !key.name().isEmpty()
-                    ? key.name()
-                    : String.join("_", key.value()).toLowerCase();
-                keys.put(name, new Key(false, name, columnList));
             }
         }
         for (SQLColumn col : columns) {
@@ -179,6 +165,36 @@ public final class SQLTable<E extends SQLRow> {
                 keys.put(name, new Key(false, name, List.of(col)));
             }
         }
+    }
+
+    private void handleUniqueKey(SQLRow.UniqueKey uniqueKey) {
+        List<SQLColumn> columnList = new ArrayList<>();
+        for (String columnName : uniqueKey.value()) {
+            columnList.add(getColumn(columnName));
+        }
+        if (columnList.isEmpty()) {
+            throw new IllegalStateException("Column list empty: "
+                                            + clazz.getName() + "/" + uniqueKey.name());
+        }
+        String name = !uniqueKey.name().isEmpty()
+            ? uniqueKey.name()
+            : String.join("_", uniqueKey.value()).toLowerCase();
+        keys.put(name, new Key(true, name, columnList));
+    }
+
+    private void handleKey(SQLRow.Key key) {
+        List<SQLColumn> columnList = new ArrayList<>();
+        for (String columnName : key.value()) {
+            columnList.add(getColumn(columnName));
+        }
+        if (columnList.isEmpty()) {
+            throw new IllegalStateException("Column list empty: "
+                                            + clazz.getName() + "/" + key.name());
+        }
+        String name = !key.name().isEmpty()
+            ? key.name()
+            : String.join("_", key.value()).toLowerCase();
+        keys.put(name, new Key(false, name, columnList));
     }
 
     public SQLColumn getColumn(String label) {

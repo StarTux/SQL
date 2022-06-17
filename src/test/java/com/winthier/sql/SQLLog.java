@@ -1,6 +1,9 @@
 package com.winthier.sql;
 
-import com.winthier.sql.SQLRow.*;
+import com.winthier.sql.SQLRow.Key;
+import com.winthier.sql.SQLRow.Name;
+import com.winthier.sql.SQLRow.NotNull;
+import com.winthier.sql.SQLRow.UniqueKey;
 import java.util.Date;
 import java.util.Random;
 import java.util.UUID;
@@ -8,8 +11,10 @@ import lombok.Data;
 import org.bukkit.Material;
 
 @Data @Name("logs") @NotNull
-@Key({"time", "playerName", "playerUuid"})
+@Key({"time", "playerUuid"})
+@Key({"time", "playerName"})
 @UniqueKey(value = {"playerUuid", "playerName"}, name = "xyz")
+@UniqueKey({"playerUuid", "material"})
 public final class SQLLog implements SQLRow {
     @Id
     private Long id;
