@@ -61,23 +61,33 @@ public final class SQLColumn {
         String typeDefinition = null;
         for (Annotation annotation : field.getDeclaredAnnotations()) {
             if (annotation instanceof SQLRow.LongText) {
-                typeDefinition = "LONGTEXT";
+                typeDefinition = "longtext";
             } else if (annotation instanceof SQLRow.MediumText) {
-                typeDefinition = "MEDIUMTEXT";
+                typeDefinition = "mediumtext";
             } else if (annotation instanceof SQLRow.Text) {
-                typeDefinition = "TEXT";
+                typeDefinition = "text";
             } else if (annotation instanceof SQLRow.Char chr) {
                 length = chr.value();
-                typeDefinition = "CHAR(" + length + ")";
+                typeDefinition = "char(" + length + ")";
             } else if (annotation instanceof SQLRow.VarChar varChar) {
                 length = varChar.value();
-                typeDefinition = "VARCHAR(" + length + ")";
+                typeDefinition = "varchar(" + length + ")";
             } else if (annotation instanceof SQLRow.Binary binary) {
                 length = binary.value();
-                typeDefinition = "BINARY(" + length + ")";
+                typeDefinition = "binary(" + length + ")";
             } else if (annotation instanceof SQLRow.VarBinary varBinary) {
                 length = varBinary.value();
-                typeDefinition = "VARBINARY(" + length + ")";
+                typeDefinition = "varbinary(" + length + ")";
+            } else if (annotation instanceof SQLRow.TinyInt) {
+                typeDefinition = "tinyint";
+            } else if (annotation instanceof SQLRow.SmallInt) {
+                typeDefinition = "smallint";
+            } else if (annotation instanceof SQLRow.MediumInt) {
+                typeDefinition = "mediumint";
+            } else if (annotation instanceof SQLRow.Int) {
+                typeDefinition = "int";
+            } else if (annotation instanceof SQLRow.BigInt) {
+                typeDefinition = "bigint";
             } else if (annotation instanceof SQLRow.Default dfl) {
                 defaultValueString = dfl.value();
             } else if (annotation instanceof SQLRow.NotNull) {
@@ -104,7 +114,7 @@ public final class SQLColumn {
                    ? ""
                    : " AUTO_INCREMENT")
                 + (defaultValueString == null || defaultValueString.isEmpty()
-                   ? ""
+                   ? (!notNull && !id ? " DEFAULT NULL" : "")
                    : " DEFAULT " + defaultValueString);
         }
         this.fieldName = field.getName();
@@ -133,17 +143,17 @@ public final class SQLColumn {
 
     private String computeTypeDefinition() {
         return switch (type) {
-        case INT -> "INT" + computePrecisionDefinition();
-        case LONG -> "BIGINT" + computePrecisionDefinition();
+        case INT -> "int" + computePrecisionDefinition();
+        case LONG -> "bigint" + computePrecisionDefinition();
         case STRING -> computeStringTypeDefinition();
-        case UUID -> "VARCHAR(40)";
-        case FLOAT -> "FLOAT";
-        case DOUBLE -> "DOUBLE";
-        case DATE -> "DATETIME";
-        case BOOLEAN -> "TINYINT";
-        case ENUM -> "INT";
-        case REFERENCE -> "INT";
-        case BYTE_ARRAY -> "BINARY(" + length + ")";
+        case UUID -> "varchar(40)";
+        case FLOAT -> "float";
+        case DOUBLE -> "double";
+        case DATE -> "datetime";
+        case BOOLEAN -> "tinyint";
+        case ENUM -> "int";
+        case REFERENCE -> "int";
+        case BYTE_ARRAY -> "binary(" + length + ")";
         };
     }
 

@@ -45,6 +45,12 @@ public interface SQLRow {
         int value();
     }
 
+    @Retention(RUNTIME) @Target(FIELD) public @interface TinyInt { }
+    @Retention(RUNTIME) @Target(FIELD) public @interface SmallInt { }
+    @Retention(RUNTIME) @Target(FIELD) public @interface MediumInt { }
+    @Retention(RUNTIME) @Target(FIELD) public @interface Int { }
+    @Retention(RUNTIME) @Target(FIELD) public @interface BigInt { }
+
     @Retention(RUNTIME) @Target(FIELD) public @interface Unique {
         String value() default "";
     }
