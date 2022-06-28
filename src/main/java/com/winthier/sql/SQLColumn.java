@@ -128,11 +128,15 @@ public final class SQLColumn {
         String getterName;
         String fieldCamel = fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
         if (fieldType == boolean.class) {
-            getterName = "is" + fieldCamel;
+            getterName = fieldCamel.startsWith("Is")
+                ? "is" + fieldCamel.substring(2)
+                : "is" + fieldCamel;
         } else {
             getterName = "get" + fieldCamel;
         }
-        String setterName = "set" + fieldCamel;
+        String setterName = fieldCamel.startsWith("Is")
+            ? "set" + fieldCamel.substring(2)
+            : "set" + fieldCamel;
         try {
             getterMethod = field.getDeclaringClass().getMethod(getterName);
             setterMethod = field.getDeclaringClass().getMethod(setterName, fieldType);
