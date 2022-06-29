@@ -100,6 +100,10 @@ public final class SQLColumn {
                 this.keyName = keyed.value();
             } else if (annotation instanceof SQLRow.Unique uq) {
                 this.uniqueKeyName = uq.value();
+            } else if (annotation instanceof SQLRow.LongBlob) {
+                typeDefinition = "longblob";
+            } else if (annotation instanceof SQLRow.MediumBlob) {
+                typeDefinition = "mediumblob";
             }
         }
         if (columnDefinition == null || columnDefinition.isEmpty()) {
@@ -158,6 +162,7 @@ public final class SQLColumn {
         case ENUM -> "int";
         case REFERENCE -> "int";
         case BYTE_ARRAY -> "binary(" + length + ")";
+        case BLOB -> "blob";
         };
     }
 
@@ -212,6 +217,9 @@ public final class SQLColumn {
                         value = null;
                     }
                 }
+                break;
+            case BLOB:
+                value = result.getBlob(getColumnName());
                 break;
             case REFERENCE:
                 num = result.getInt(getColumnName());
@@ -356,11 +364,25 @@ public final class SQLColumn {
 
     protected void setValue(SQLRow instance, Object value) {
         try {
+            if (value instanceof Number number) {
+                switch (type) {
+                case INT: value = number.intValue(); break;
+                case LONG: value = number.longValue(); break;
+                case FLOAT: value = number.floatValue(); break;
+                case DOUBLE: value = number.doubleValue(); break;
+                default: break;
+                }
+            }
             setterMethod.invoke(instance, value);
         } catch (IllegalAccessException iae) {
             throw new IllegalStateException(iae);
         } catch (InvocationTargetException ite) {
             throw new IllegalStateException(ite);
+        } catch (IllegalArgumentException iae) {
+            throw new IllegalStateException("column=" + table.getTableName() + "." + columnName
+                                            + " type=" + fieldType.getName()
+                                            + " value=" + (value != null ? value.getClass().getName() : "null"),
+                                            iae);
         }
     }
 

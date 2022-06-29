@@ -16,10 +16,11 @@ public interface SQLRow {
     @Retention(RUNTIME) @Target(FIELD) public @interface Id { }
 
     @Retention(RUNTIME) @Target(FIELD) public @interface Text { }
-
     @Retention(RUNTIME) @Target(FIELD) public @interface MediumText { }
-
     @Retention(RUNTIME) @Target(FIELD) public @interface LongText { }
+
+    @Retention(RUNTIME) @Target(FIELD) public @interface MediumBlob { }
+    @Retention(RUNTIME) @Target(FIELD) public @interface LongBlob { }
 
     @Retention(RUNTIME) @Target(FIELD) public @interface Default {
         String value() default "";

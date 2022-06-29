@@ -352,7 +352,7 @@ public final class SQLTable<E extends SQLRow> {
                 for (SQLRow inst : instances) {
                     if (idColumn.getValue(inst) == null) {
                         if (keySet.next()) {
-                            int newId = keySet.getInt(1);
+                            Object newId = keySet.getObject(1);
                             idColumn.setValue(inst, newId);
                         } else {
                             if (!doIgnore) {

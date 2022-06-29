@@ -1,13 +1,15 @@
 package com.winthier.sql;
 
 import java.lang.reflect.Field;
+import java.sql.Blob;
 import java.util.Date;
 import java.util.UUID;
 
 /**
  * Java types representable in SQL.  Changes here may need to be reflected in other places:
- * - SQLColumn#getTypeDefinition
- * - SQLUtil#formatStatement (maybe)
+ * - SQLColumn#computeTypeDefinition
+ * - SQLUtil#formatStatement (optional)
+ * - SQLColumn#load (optional)
  */
 enum SQLType {
     INT(Integer.class, int.class),
@@ -20,7 +22,8 @@ enum SQLType {
     DATE(Date.class),
     ENUM(Enum.class),
     BYTE_ARRAY(byte[].class),
-    REFERENCE(SQLRow.class);
+    REFERENCE(SQLRow.class),
+    BLOB(Blob.class);
 
     private final Class<?>[] classes;
 
@@ -59,6 +62,8 @@ enum SQLType {
             return BYTE_ARRAY;
         } else if (SQLRow.class.isAssignableFrom(fieldType)) {
             return REFERENCE;
+        } else if (Blob.class.isAssignableFrom(fieldType)) {
+            return BLOB;
         } else {
             throw new IllegalArgumentException("No SQL type found for " + fieldType.getName());
         }

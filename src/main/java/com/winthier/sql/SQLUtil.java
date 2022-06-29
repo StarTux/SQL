@@ -1,5 +1,6 @@
 package com.winthier.sql;
 
+import java.sql.Blob;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -79,6 +80,8 @@ public final class SQLUtil {
                 statement.setInt(index, en.ordinal());
             } else if (value instanceof byte[] byteArray) {
                 statement.setBytes(index, byteArray);
+            } else if (value instanceof Blob blob) {
+                statement.setBlob(index, blob);
             } else {
                 String name = value == null ? "null" : value.getClass().getName();
                 throw new IllegalArgumentException("Unexpected type in '" + statement + "': " + name + ", " + values + ", index=" + index);
