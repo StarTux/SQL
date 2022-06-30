@@ -7,3 +7,19 @@ api-version: 1.19
 description: SQL library for Spigot. Replacement for Ebean.
 author: StarTux
 website: 'https://github.com/StarTux/SQL'
+
+depend: [Core]
+softdepend: []
+
+commands:
+
+  sql:
+    aliases: []
+    description: Admin interface
+    permission: sql.admin
+
+permissions:
+
+  sql.admin:
+    description: Use /sql
+    default: op

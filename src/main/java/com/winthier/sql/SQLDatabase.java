@@ -1,5 +1,6 @@
 package com.winthier.sql;
 
+import com.cavetale.core.connect.ServerGroup;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -25,7 +26,6 @@ import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -34,8 +34,8 @@ public final class SQLDatabase {
     private final JavaPlugin plugin;
     private final Map<Class<? extends SQLRow>, SQLTable<? extends SQLRow>> tables = new HashMap<>();
     private static final String SQL_CONFIG_FILE = "sql.yml";
-    private final boolean debug;
-    private final Config config;
+    private boolean debug;
+    private Config config;
     private Connection primaryConnection;
     private Connection asyncConnection;
     private LinkedBlockingQueue<Runnable> asyncQueue;
@@ -48,24 +48,77 @@ public final class SQLDatabase {
 
     public SQLDatabase(final JavaPlugin plugin) {
         this.plugin = plugin;
-        config = new Config();
+    }
+
+    public SQLDatabase(final JavaPlugin plugin, final Config config) {
+        this.plugin = plugin;
+        this.config = config;
+    }
+
+    public Config getConfig() {
+        if (config != null) return config;
+        this.config = new Config();
         config.setHost("127.0.0.1");
         config.setPort("3306");
         config.setDatabase(plugin.getName());
         config.setUser("user");
         config.setPassword("password");
-        Plugin sqlPlugin = Bukkit.getPluginManager().getPlugin("SQL");
-        if (sqlPlugin != null) {
-            config.load(plugin.getName(), sqlPlugin.getConfig().getConfigurationSection("database"));
+        ConfigurationSection globalConfig = findGlobalConfiguration();
+        if (globalConfig != null) {
+            config.load(plugin.getName(), globalConfig.getConfigurationSection("database"));
+        } else {
+            plugin.getLogger().severe("Global config NOT found");
         }
         config.load(plugin.getName(), getPluginDatabaseConfig());
-        debug = config.isDebug();
+        this.debug = config.isDebug();
         debugLog(config);
+        SQLPlugin sqlPlugin = getSQLPlugin();
+        if (sqlPlugin != null) {
+            sqlPlugin.register(this);
+        }
+        return config;
+    }
+
+    private SQLPlugin getSQLPlugin() {
+        return Bukkit.getPluginManager().getPlugin("SQL") instanceof SQLPlugin sqlPlugin ? sqlPlugin : null;
+    }
+
+    private ConfigurationSection findGlobalConfiguration() {
+        SQLPlugin sqlPlugin = getSQLPlugin();
+        if (sqlPlugin != null) {
+            // Prefer the local file if it exists
+            File localSQLPluginConfig = new File(sqlPlugin.getDataFolder(), "config.yml");
+            if (localSQLPluginConfig.exists()) return sqlPlugin.getConfig();
+        }
+        String configFilename = determineGlobalConfigFilename();
+        if (configFilename != null) {
+            File file = new File("/home/mc/public/config/SQL/" + configFilename);
+            if (file.exists()) {
+                return YamlConfiguration.loadConfiguration(file);
+            }
+        }
+        return sqlPlugin != null
+            ? sqlPlugin.getConfig()
+            : null;
+    }
+
+    protected String determineGlobalConfigFilename() {
+        if (Set.of("Bans", "Chat", "Mail", "Perm", "PlayerCache", "PlayerInfo", "Ticket", "Tutor").contains(plugin.getName())) {
+            // These plugins are always global
+            return "main.yml";
+        }
+        switch (ServerGroup.current()) {
+        case MUSEUM: return "museum.yml";
+        case TESTING: return "testing.yml";
+        case MAIN: return "main.yml";
+        default:
+            return null;
+        }
     }
 
     private SQLDatabase(final SQLDatabase other) {
         plugin = other.plugin;
-        config = other.config;
+        config = other.getConfig();
         debug = other.debug;
     }
 
@@ -483,7 +536,7 @@ public final class SQLDatabase {
         try {
             if (primaryConnection == null || !primaryConnection.isValid(1)) {
                 primaryConnection = DriverManager
-                    .getConnection(config.getUrl(), config.getUser(), config.getPassword());
+                    .getConnection(getConfig().getUrl(), getConfig().getUser(), getConfig().getPassword());
             }
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
@@ -495,7 +548,7 @@ public final class SQLDatabase {
         try {
             if (asyncConnection == null || !asyncConnection.isValid(1)) {
                 asyncConnection = DriverManager
-                    .getConnection(config.getUrl(), config.getUser(), config.getPassword());
+                    .getConnection(getConfig().getUrl(), getConfig().getUser(), getConfig().getPassword());
             }
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
@@ -547,10 +600,10 @@ public final class SQLDatabase {
                 tasks.add(task);
                 asyncQueue.drainTo(tasks);
                 int backlog = tasks.size();
-                if (backlog > config.backlogThreshold) {
+                if (backlog > getConfig().backlogThreshold) {
                     plugin.getLogger()
                         .warning("[SQL] Backlog exceeds threshold: "
-                                 + backlog + " > " + config.backlogThreshold);
+                                 + backlog + " > " + getConfig().backlogThreshold);
                 }
                 for (Runnable run : tasks) {
                     try {
@@ -600,6 +653,10 @@ public final class SQLDatabase {
             } catch (SQLException pe) {
                 pe.printStackTrace();
             }
+        }
+        SQLPlugin sqlPlugin = getSQLPlugin();
+        if (sqlPlugin != null) {
+            sqlPlugin.unregister(this);
         }
     }
 
