@@ -103,11 +103,11 @@ public final class SQLDatabase {
     }
 
     protected String determineGlobalConfigFilename() {
-        if (Set.of("Bans", "Chat", "Mail", "Perm", "PlayerCache", "PlayerInfo", "Ticket", "Tutor").contains(plugin.getName())) {
+        if (Set.of("Bans", "Chat", "Mail", "Perm", "PlayerCache", "PlayerInfo", "Ticket").contains(plugin.getName())) {
             // These plugins are always global
             return "main.yml";
         }
-        if (Set.of("MemberList", "Photos", "Title", "Wardrobe", "Warp", "Watchman").contains(plugin.getName())) {
+        if (Set.of("Fam", "MemberList", "Photos", "Title", "Wardrobe", "Warp", "Watchman").contains(plugin.getName())) {
             // Testing is separate; the rest is with main
             return ServerGroup.current() == ServerGroup.TESTING
                 ? "testing.yml"
