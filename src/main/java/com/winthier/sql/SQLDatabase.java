@@ -107,7 +107,7 @@ public final class SQLDatabase {
             // These plugins are always global
             return "main.yml";
         }
-        if (Set.of("MemberList", "Photos", "Wardrobe", "Warp", "Watchman").contains(plugin.getName())) {
+        if (Set.of("MemberList", "Photos", "Title", "Wardrobe", "Warp", "Watchman").contains(plugin.getName())) {
             // Testing is separate; the rest is with main
             return ServerGroup.current() == ServerGroup.TESTING
                 ? "testing.yml"
