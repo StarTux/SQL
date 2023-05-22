@@ -3,6 +3,7 @@ package com.winthier.sql;
 import com.cavetale.core.command.AbstractCommand;
 import com.cavetale.core.command.CommandWarn;
 import java.io.File;
+import java.util.List;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -26,8 +27,11 @@ public final class SQLCommand extends AbstractCommand<SQLPlugin> {
             .description("List databases")
             .senderCaller(this::list);
         rootNode.addChild("move").arguments("<source> <dest>")
-            .description("Move databases")
+            .description("Move database")
             .senderCaller(this::move);
+        rootNode.addChild("copy").arguments("<source> <dest>")
+            .description("Copy database")
+            .senderCaller(this::copy);
     }
 
     private void save(CommandSender sender) {
@@ -84,6 +88,56 @@ public final class SQLCommand extends AbstractCommand<SQLPlugin> {
                 break;
             }
             sender.sendMessage(text(result + ": " + sql, AQUA));
+        }
+        destDatabase.close();
+        return true;
+    }
+
+    /**
+     * Copy a database. Usually you would copy a plugin database to beta.
+     * NOTE: This requires the source database to belong to a loaded
+     * plugin and be connected to the source database.
+     *
+     * e.g.: /sql copy Perm testing
+     *
+     * To flush Permissions from main to testing.  Of course this
+     * would have to be done from a server that is connected to the
+     * global Perm database.
+     */
+    private boolean copy(CommandSender sender, String[] args) {
+        if (args.length != 2) return false;
+        String src = args[0];
+        String dst = args[1];
+        SQLDatabase sourceDatabase = plugin.findDatabase(src);
+        if (sourceDatabase == null) throw new CommandWarn("Database not found: " + src);
+        File file = new File("/home/mc/public/config/SQL/" + dst + ".yml");
+        if (!file.exists()) throw new CommandWarn("Config not found: " + file);
+        Config config = new Config();
+        ConfigurationSection section = YamlConfiguration.loadConfiguration(file);
+        config.load(sourceDatabase.getPlugin().getName(), section.getConfigurationSection("database"));
+        sender.sendMessage("Config: " + config.toString());
+        SQLDatabase destDatabase = new SQLDatabase(sourceDatabase.getPlugin(), config);
+        for (Class<? extends SQLRow> row : sourceDatabase.getTables().keySet()) {
+            destDatabase.registerTable(row);
+        }
+        for (Class<? extends SQLRow> row : sourceDatabase.getTables().keySet()) {
+            String srcTable = sourceDatabase.getConfig().getDatabase() + "." + sourceDatabase.getTable(row).getTableName();
+            String dstTable = destDatabase.getConfig().getDatabase() + "." + destDatabase.getTable(row).getTableName();
+            List<String> sqls = List.of("drop table " + dstTable,
+                                        "create table " + dstTable + " like " + srcTable,
+                                        "insert into " + dstTable + " select * from " + srcTable);
+            for (String sql : sqls) {
+                sender.sendMessage(sql);
+                int result;
+                try {
+                    result = sourceDatabase.executeUpdate(sql);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    sender.sendMessage(text("Error! See console: " + e.getMessage(), RED));
+                    break;
+                }
+                sender.sendMessage(text(result + ": " + sql, AQUA));
+            }
         }
         destDatabase.close();
         return true;
