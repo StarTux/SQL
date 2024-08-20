@@ -850,4 +850,27 @@ public final class SQLTable<E extends SQLRow> {
             return statement;
         }
     }
+
+    public void createColumnIfMissing(String columnName) {
+        final SQLColumn column = getColumn(columnName);
+        final String query = "SELECT `" + column.getColumnName() + "` FROM `" + getTableName() + "` LIMIT 1";
+        database.debugLog(query);
+        try (Statement statement = database.getConnection().createStatement();
+             ResultSet result = statement.executeQuery(query)) {
+            database.getPlugin().getLogger().info("[" + tableName + "] Column `" + column.getColumnName() + "` exists. No action necessary");
+            return;
+        } catch (SQLException sqle) { }
+        final int columnIndex = columns.indexOf(column);
+        final String update = "ALTER TABLE `" + getTableName() + "` ADD COLUMN " + column.getCreateTableFragment()
+            + (columnIndex == 0
+               ? " FIRST"
+               : " AFTER `" + columns.get(columnIndex - 1).getColumnName() + "`");
+        database.getPlugin().getLogger().info("[" + tableName + "] Creating missing column " + column.getColumnName() + ": " + update);
+        try (Statement statement = database.getConnection().createStatement()) {
+            final int result = statement.executeUpdate(update);
+            database.getPlugin().getLogger().info("[" + tableName + "] Creating missing column " + column.getColumnName() + " => " + result);
+        } catch (SQLException sqle) {
+            throw new IllegalStateException(update, sqle);
+        }
+    }
 }
