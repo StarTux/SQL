@@ -7,11 +7,13 @@ import java.io.InputStreamReader;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -506,6 +508,30 @@ public final class SQLDatabase {
             }
         } catch (SQLException sqle) {
             throw new PersistenceException(sqle);
+        }
+    }
+
+    public List<Map<String, Object>> executeSafeQuery(String sql) {
+        debugLog(sql);
+        try (Statement statement = getConnection().createStatement();
+             ResultSet resultSet = statement.executeQuery(sql)) {
+            final List<Map<String, Object>> result = new ArrayList<>();
+            final ResultSetMetaData meta = resultSet.getMetaData();
+            final int columnCount = meta.getColumnCount();
+            final List<String> columnNames = new ArrayList<>(columnCount);
+            for (int i = 0; i < columnCount; i += 1) {
+                columnNames.add(meta.getColumnName(i + 1));
+            }
+            while (resultSet.next()) {
+                final Map<String, Object> entry = new LinkedHashMap<>();
+                result.add(entry);
+                for (String columnName : columnNames) {
+                    entry.put(columnName, resultSet.getObject(columnName));
+                }
+            }
+            return result;
+        } catch (SQLException sqle) {
+            throw new IllegalStateException(sqle);
         }
     }
 
