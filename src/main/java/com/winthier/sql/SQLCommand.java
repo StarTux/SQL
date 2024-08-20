@@ -3,7 +3,10 @@ package com.winthier.sql;
 import com.cavetale.core.command.AbstractCommand;
 import com.cavetale.core.command.CommandWarn;
 import java.io.File;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.logging.Level;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -32,6 +35,12 @@ public final class SQLCommand extends AbstractCommand<SQLPlugin> {
         rootNode.addChild("copy").arguments("<source> <dest>")
             .description("Copy database")
             .senderCaller(this::copy);
+        rootNode.addChild("query").arguments("<database> <query...>")
+            .description("Run safe SQL query")
+            .senderCaller(this::query);
+        rootNode.addChild("update").arguments("<database> <update...>")
+            .description("Run SQL update")
+            .senderCaller(this::update);
     }
 
     private void save(CommandSender sender) {
@@ -140,6 +149,43 @@ public final class SQLCommand extends AbstractCommand<SQLPlugin> {
             }
         }
         destDatabase.close();
+        return true;
+    }
+
+    private boolean query(CommandSender sender, String[] args) {
+        if (args.length < 2) return false;
+        final String databaseName = args[0];
+        final String query = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+        final SQLDatabase database = plugin.findDatabase(databaseName);
+        if (database == null) throw new CommandWarn("Database not found: " + databaseName);
+        final List<Map<String, Object>> result;
+        try {
+            result = database.executeSafeQuery(query);
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.SEVERE, "Query: " + query, e);
+            throw new CommandWarn("An error occured, see console: " + e.getMessage());
+        }
+        for (Map<String, Object> row : result) {
+            sender.sendMessage(text(row.toString(), GRAY));
+        }
+        sender.sendMessage(text("" + result.size() + " result(s): " + query, YELLOW));
+        return true;
+    }
+
+    private boolean update(CommandSender sender, String[] args) {
+        if (args.length < 2) return false;
+        final String databaseName = args[0];
+        final String update = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+        final SQLDatabase database = plugin.findDatabase(databaseName);
+        if (database == null) throw new CommandWarn("Database not found: " + databaseName);
+        final int result;
+        try {
+            result = database.executeUpdate(update);
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.SEVERE, "Update: " + update, e);
+            throw new CommandWarn("An error occured, see console: " + e.getMessage());
+        }
+        sender.sendMessage(text("Update result " + result + ": " + update, YELLOW));
         return true;
     }
 }
