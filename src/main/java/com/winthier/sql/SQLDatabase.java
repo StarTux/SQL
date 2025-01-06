@@ -170,7 +170,7 @@ public final class SQLDatabase {
     public void registerTables(Class<?>... classes) {
         for (Class<?> it : classes) {
             if (!SQLRow.class.isAssignableFrom(it)) {
-                throw new RuntimeException(it.getName() + " does not implement SQLRow!");
+                throw new RuntimeException(plugin.getName() + ": " + it.getName() + " does not implement SQLRow!");
             }
             @SuppressWarnings("unchecked") Class<? extends SQLRow> clazz = (Class<? extends SQLRow>) it;
             registerTable(clazz);
@@ -179,20 +179,20 @@ public final class SQLDatabase {
 
     public SQLTable<? extends SQLRow> findTable(Class<?> clazz) {
         SQLTable<? extends SQLRow> result = tables.get(clazz);
-        if (result == null) throw new IllegalStateException("Table not found: " + clazz.getName());
+        if (result == null) throw new IllegalStateException(plugin.getName() + ": " + "Table not found: " + clazz.getName());
         return result;
     }
 
     public <E extends SQLRow> SQLTable<E> getTable(Class<E> clazz) {
         @SuppressWarnings("unchecked") SQLTable<E> result = (SQLTable<E>) tables.get(clazz);
-        if (result == null) throw new IllegalStateException("Table not found: " + clazz.getName());
+        if (result == null) throw new IllegalStateException(plugin.getName() + ": " + "Table not found: " + clazz.getName());
         return result;
     }
 
     public <E extends SQLRow> SQLTable<E> getTable(E instance) {
         @SuppressWarnings("unchecked") Class<E> clazz = (Class<E>) instance.getClass();
         @SuppressWarnings("unchecked") SQLTable<E> result = (SQLTable<E>) tables.get(clazz);
-        if (result == null) throw new IllegalStateException("Table not found: " + clazz.getName());
+        if (result == null) throw new IllegalStateException(plugin.getName() + ": " + "Table not found: " + clazz.getName());
         return result;
     }
 
@@ -480,7 +480,7 @@ public final class SQLDatabase {
             debugLog(sql);
             return statement.executeUpdate(sql);
         } catch (SQLException sqle) {
-            throw new PersistenceException(sqle);
+            throw new RuntimeException("plugin: " + plugin.getName(), sqle);
         }
     }
 
@@ -493,7 +493,7 @@ public final class SQLDatabase {
                         Bukkit.getScheduler().runTask(plugin, () -> callback.accept(result));
                     }
                 } catch (SQLException sqle) {
-                    throw new PersistenceException(sqle);
+                    throw new RuntimeException("plugin: " + plugin.getName(), sqle);
                 }
             });
     }
@@ -507,7 +507,7 @@ public final class SQLDatabase {
                 return cached;
             }
         } catch (SQLException sqle) {
-            throw new PersistenceException(sqle);
+            throw new RuntimeException("plugin: " + plugin.getName(), sqle);
         }
     }
 
@@ -531,7 +531,7 @@ public final class SQLDatabase {
             }
             return result;
         } catch (SQLException sqle) {
-            throw new IllegalStateException(sqle);
+            throw new IllegalStateException("plugin: " + plugin.getName(), sqle);
         }
     }
 
@@ -545,7 +545,7 @@ public final class SQLDatabase {
                         Bukkit.getScheduler().runTask(plugin, () -> callback.accept(cached));
                     }
                 } catch (SQLException sqle) {
-                    throw new PersistenceException(sqle);
+                    throw new RuntimeException("plugin: " + plugin.getName(), sqle);
                 }
             });
     }
@@ -571,7 +571,7 @@ public final class SQLDatabase {
                     .getConnection(getConfig().getUrl(), getConfig().getUser(), getConfig().getPassword());
             }
         } catch (SQLException sqle) {
-            throw new PersistenceException(sqle);
+            throw new RuntimeException("plugin: " + plugin.getName(), sqle);
         }
         return primaryConnection;
     }
@@ -583,7 +583,7 @@ public final class SQLDatabase {
                     .getConnection(getConfig().getUrl(), getConfig().getUser(), getConfig().getPassword());
             }
         } catch (SQLException sqle) {
-            throw new PersistenceException(sqle);
+            throw new RuntimeException("plugin: " + plugin.getName(), sqle);
         }
         return asyncConnection;
     }
