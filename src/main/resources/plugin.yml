@@ -2,7 +2,7 @@ main: com.winthier.sql.SQLPlugin
 name: SQL
 
 version: 0.1
-api-version: '1.21'
+api-version: '1.21.8'
 
 description: SQL library for Spigot. Replacement for Ebean.
 author: StarTux
