@@ -15,6 +15,41 @@
   <url>https://github.com/StarTux/SQL</url>
   <packaging>jar</packaging>
 
+  <build>
+    <finalName>${project.name}</finalName>
+    <plugins>
+
+      <!-- Shade -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.2.4</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+             <artifactSet>
+               <includes>org.eclipse.persistence:javax.persistence</includes>
+             </artifactSet>
+              <filters>
+                <filter>
+                 <artifact>org.eclipse.persistence:javax.persistence</artifact>
+                  <includes>
+                    <include>**/*.class</include>
+                  </includes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+    </plugins>
+  </build>
+
   <dependencies>
 
     <!-- JUnit -->
@@ -54,4 +89,5 @@
     </dependency>
 
   </dependencies>
+
 </project>
